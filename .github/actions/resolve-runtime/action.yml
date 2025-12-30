@@ -1,5 +1,6 @@
 name: "Resolve Runtime Defaults"
 description: "Resolves runtime/toolchain defaults from vendored runtime-matrix.yml"
+
 inputs:
   runtime_name:
     description: "One of: node|python|java|dotnet|go"
@@ -8,6 +9,7 @@ inputs:
     description: "Optional override (e.g., 20.x, 3.12, 21, 8.0.x, 1.22.x)"
     required: false
     default: ""
+
 outputs:
   runtime_version:
     description: "Resolved runtime version (override or matrix default)"
@@ -17,6 +19,7 @@ outputs:
     description: "Default package manager per runtime"
   build_tool_default:
     description: "Default build tool per runtime"
+
 runs:
   using: "node20"
-  main: "index.mjs"
+  main: "dist/index.js"

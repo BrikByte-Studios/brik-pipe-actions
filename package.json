@@ -1,0 +1,13 @@
+{
+  "name": "brik-pipe-actions",
+  "private": true,
+  "scripts": {
+    "build:resolve-runtime": "ncc build .github/actions/resolve-runtime/src/index.ts -o .github/actions/resolve-runtime/dist"
+  },
+  "devDependencies": {
+    "@actions/core": "^1.11.1",
+    "@vercel/ncc": "^0.38.1",
+    "js-yaml": "^4.1.0",
+    "typescript": "^5.6.3"
+  }
+}
