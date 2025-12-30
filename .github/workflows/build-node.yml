@@ -138,7 +138,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Resolve runtime defaults (matrix)
         id: resolve
-        uses: ./.github/actions/resolve-runtime
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/resolve-runtime@main
         with:
           runtime_name: node
           runtime_version: ${{ inputs.runtime_version }}
@@ -240,7 +240,7 @@ jobs:
       - name: Export build evidence (.audit)
         id: evidence
         if: always()
-        uses: ./.github/actions/export-build-evidence
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/export-build-evidence@main
         with:
           # Stack identifier for evidence & downstream reasoning.
           stack: "node"
