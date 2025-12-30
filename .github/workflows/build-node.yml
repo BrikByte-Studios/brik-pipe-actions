@@ -214,7 +214,7 @@ jobs:
       # -----------------------------------------------------------------------
       # 6) Test step (default on)
       #    - Default command:
-      #        npm test
+      #        make test
       #    - Can be overridden for pnpm/yarn or custom scripts.
       # -----------------------------------------------------------------------
       - name: Test (default on)

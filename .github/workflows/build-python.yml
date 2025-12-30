@@ -114,7 +114,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Resolve runtime defaults (matrix)
         id: resolve
-        uses: ./.github/actions/resolve-runtime
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/resolve-runtime@main
         with:
           runtime_name: python
           runtime_version: ${{ inputs.runtime_version }}
@@ -178,7 +178,7 @@ jobs:
       # -----------------------------------------------------------------------
       # 6) Test step (default on)
       #    - Default command:
-      #        python -m pytest -q
+      #        make test
       # -----------------------------------------------------------------------
       - name: Test (default on)
         id: test
@@ -188,7 +188,7 @@ jobs:
         run: |
           set -euo pipefail
           CMD="${{ inputs.test_command }}"
-          if [ -z "$CMD" ]; then CMD="python -m pytest -q"; fi
+          if [ -z "$CMD" ]; then CMD="make test"; fi
           echo "Test: $CMD"
           bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
 
@@ -216,7 +216,7 @@ jobs:
       - name: Export build evidence (.audit)
         id: evidence
         if: always()
-        uses: ./.github/actions/export-build-evidence
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/export-build-evidence@main
         with:
           # Stack identifier for evidence & downstream reasoning.
           stack: "python"

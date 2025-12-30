@@ -103,7 +103,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Resolve runtime defaults (matrix)
         id: resolve
-        uses: ./.github/actions/resolve-runtime
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/resolve-runtime@main
         with:
           runtime_name: dotnet
           runtime_version: ${{ inputs.runtime_version }}
@@ -160,7 +160,7 @@ jobs:
           set -euo pipefail
           CMD="${{ inputs.test_command }}"
           # If no override is provided, use canonical v1 default.
-          if [ -z "$CMD" ]; then CMD="dotnet test --no-restore"; fi
+          if [ -z "$CMD" ]; then CMD="make test"; fi
           bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
 
       # -----------------------------------------------------------------------
@@ -186,7 +186,7 @@ jobs:
       - name: Export build evidence (.audit)
         id: evidence
         if: always()
-        uses: ./.github/actions/export-build-evidence
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/export-build-evidence@main
         with:
           # Stack identifier for evidence + downstream reasoning.
           stack: "dotnet"
