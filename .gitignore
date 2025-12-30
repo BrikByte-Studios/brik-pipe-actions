@@ -205,3 +205,6 @@ $RECYCLE.BIN/
 *.bak
 *.tmp
 *.log
+
+!.github/actions/**/dist/
+!.github/actions/**/dist/index.js
