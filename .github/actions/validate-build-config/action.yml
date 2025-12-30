@@ -1,0 +1,5 @@
+name: "Validate Brik build config"
+description: "Validates .brik/build.yml against the BrikByte runtime matrix"
+runs:
+  using: "node20"
+  main: "dist/validate-build-config.mjs"

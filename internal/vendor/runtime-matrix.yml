@@ -17,6 +17,7 @@
 schemaVersion: 1
 lastUpdated: "2025-12-30"
 owner: "Platform Engineering"
+
 policy:
   name: "LTS-first, N/N-1"
   description: >
@@ -36,10 +37,27 @@ runnerRequirements:
       - "ubuntu-24.04"
       - "ubuntu-22.04"
 
+# Contingency plan implementation:
+# - If there is disagreement about defaults/tools, mark the relevant stack/tool/version as
+#   experimental and record the dispute here for scheduled review.
+contingency:
+  disputes:
+    - topic: "Default Java version (17 vs 21)"
+      currentDecision: "Default = 21; Java 17 remains supported (N-1)"
+      nextReview: "2026-03-31"
+      reference: "ADR-PIPE-001"
+    - topic: "Legacy .NET SDKs (6/7) support"
+      currentDecision: "Not supported in v1; only via experimental exception if required"
+      nextReview: "2026-03-31"
+      reference: "ADR-PIPE-001"
+
 stacks:
   - runtime:
       name: "node"
       displayName: "Node.js"
+    # Mitigation 3: Start minimal — Node is primary adoption target in v1
+    adoptionPriority: "primary"
+
     supportedVersions:
       policy: "N/N-1"
       versions:
@@ -47,34 +65,37 @@ stacks:
         - "20.x"
     defaultVersion: "20.x"
     supportStatus: "supported"
+
+    # Mitigation 2: Controlled override later — formal exception registry structure
+    exceptions:
+      enabled: false
+      rules: []
+
     toolchain:
       packageManagers:
         default: "npm"
-        allowed:
-          - "npm"
-          - "pnpm"
-          - "yarn"
+        allowed: ["npm", "pnpm", "yarn"]
       buildTools:
         default: "npm"
-        allowed:
-          - "npm"
-          - "pnpm"
-          - "yarn"
+        allowed: ["npm", "pnpm", "yarn"]
+
     defaultCommands:
       install: "npm ci"
       lint: "npm run lint"
       test: "npm test"
       build: "npm run build"
+
     projectConventions:
       directories:
         source: ["src"]
         tests: ["test", "tests", "__tests__"]
-      buildOutput:
-        - "dist"
+      buildOutput: ["dist"]
+
     deprecationPolicy:
       alignsToVendorEOL: true
       removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
       exceptionProcess: "Mark as experimental + link issue/approval in notes."
+
     notes:
       - "Monorepo support is out-of-scope for v1; use workingDirectory overrides."
       - "pnpm/yarn allowed via config; defaults remain npm."
@@ -82,6 +103,8 @@ stacks:
   - runtime:
       name: "python"
       displayName: "Python"
+    adoptionPriority: "primary"
+
     supportedVersions:
       policy: "N/N-1"
       versions:
@@ -89,39 +112,45 @@ stacks:
         - "3.12"
     defaultVersion: "3.12"
     supportStatus: "supported"
+
+    exceptions:
+      enabled: false
+      rules: []
+
     toolchain:
       packageManagers:
         default: "pip"
-        allowed:
-          - "pip"
-          - "poetry"
+        allowed: ["pip", "poetry"]
       buildTools:
         default: "pip"
-        allowed:
-          - "pip"
-          - "poetry"
+        allowed: ["pip", "poetry"]
+
     defaultCommands:
       install: "python -m pip install -r requirements.txt"
       lint: "python -m ruff check ."
       test: "python -m pytest -q"
       build: "python -m compileall ."
+
     projectConventions:
       directories:
         source: ["src"]
         tests: ["tests"]
-      buildOutput:
-        - "__pycache__"
+      buildOutput: ["__pycache__"]
+
     deprecationPolicy:
       alignsToVendorEOL: true
       removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
       exceptionProcess: "Mark as experimental + link issue/approval in notes."
+
     notes:
       - "Default lint uses ruff (fast + modern). Teams may override."
-      - "Build step for Python v1 is a minimal compile check; packaging is out-of-scope (PIPE-CORE-1.2/1.?.)."
+      - "Build step for Python v1 is a minimal compile check; packaging is out-of-scope."
 
   - runtime:
       name: "java"
       displayName: "Java"
+    adoptionPriority: "secondary"
+
     supportedVersions:
       policy: "N/N-1"
       versions:
@@ -129,32 +158,36 @@ stacks:
         - "21"
     defaultVersion: "21"
     supportStatus: "supported"
+
+    exceptions:
+      enabled: false
+      rules: []
+
     toolchain:
       packageManagers:
         default: "maven"
-        allowed:
-          - "maven"
-          - "gradle"
+        allowed: ["maven", "gradle"]
       buildTools:
         default: "maven"
-        allowed:
-          - "maven"
-          - "gradle"
+        allowed: ["maven", "gradle"]
+
     defaultCommands:
       install: "mvn -B -DskipTests dependency:go-offline"
       lint: "mvn -B -DskipTests verify"
       test: "mvn -B test"
       build: "mvn -B -DskipTests package"
+
     projectConventions:
       directories:
         source: ["src/main/java"]
         tests: ["src/test/java"]
-      buildOutput:
-        - "target"
+      buildOutput: ["target"]
+
     deprecationPolicy:
       alignsToVendorEOL: true
       removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
       exceptionProcess: "Mark as experimental + link issue/approval in notes."
+
     notes:
       - "Multi-module builds supported by running at repo root or configured workingDirectory."
       - "Gradle allowed via config; defaults remain Maven."
@@ -162,37 +195,44 @@ stacks:
   - runtime:
       name: "dotnet"
       displayName: ".NET"
+    adoptionPriority: "secondary"
+
     supportedVersions:
       policy: "LTS-only"
       versions:
         - "8.0.x"
     defaultVersion: "8.0.x"
     supportStatus: "supported"
+
+    exceptions:
+      enabled: false
+      rules: []
+
     toolchain:
       packageManagers:
         default: "dotnet"
-        allowed:
-          - "dotnet"
+        allowed: ["dotnet"]
       buildTools:
         default: "dotnet"
-        allowed:
-          - "dotnet"
+        allowed: ["dotnet"]
+
     defaultCommands:
       install: "dotnet restore"
       lint: "dotnet format --verify-no-changes"
       test: "dotnet test --no-restore"
       build: "dotnet build --no-restore -c Release"
+
     projectConventions:
       directories:
         source: ["src"]
         tests: ["test", "tests"]
-      buildOutput:
-        - "bin"
-        - "obj"
+      buildOutput: ["bin", "obj"]
+
     deprecationPolicy:
       alignsToVendorEOL: true
       removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
       exceptionProcess: "Mark as experimental + link issue/approval in notes."
+
     notes:
       - ".NET v1 supports LTS-only to reduce ecosystem churn."
       - "If legacy SDKs are needed, add as experimental with explicit exception approval."
@@ -200,6 +240,8 @@ stacks:
   - runtime:
       name: "go"
       displayName: "Go"
+    adoptionPriority: "secondary"
+
     supportedVersions:
       policy: "N/N-1"
       versions:
@@ -207,30 +249,36 @@ stacks:
         - "1.23.x"
     defaultVersion: "1.22.x"
     supportStatus: "supported"
+
+    exceptions:
+      enabled: false
+      rules: []
+
     toolchain:
       packageManagers:
         default: "gomod"
-        allowed:
-          - "gomod"
+        allowed: ["gomod"]
       buildTools:
         default: "go"
-        allowed:
-          - "go"
+        allowed: ["go"]
+
     defaultCommands:
       install: "go mod download"
       lint: "golangci-lint run ./..."
       test: "go test ./... -count=1"
       build: "go build ./..."
+
     projectConventions:
       directories:
         source: ["."]
         tests: ["."]
-      buildOutput:
-        - "bin"
+      buildOutput: ["bin"]
+
     deprecationPolicy:
       alignsToVendorEOL: true
       removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
       exceptionProcess: "Mark as experimental + link issue/approval in notes."
+
     notes:
       - "golangci-lint requires setup in templates; may be optional via config."
       - "Go build output is project-specific; packaging is out-of-scope for v1."
