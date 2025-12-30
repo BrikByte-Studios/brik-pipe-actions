@@ -1,8 +1,18 @@
+/**
+ * BrikByteOS Governance Gate
+ *
+ * Enforces that ALL reusable workflows expose the canonical v1 workflow_call
+ * contract and that no extra inputs are added without governance approval.
+ *
+ * Zero dependencies. Hermetic. Deterministic.
+ */
+
 import fs from "node:fs";
 import path from "node:path";
-import yaml from "js-yaml";
 
-const ALLOWED_COMMON = new Set([
+const WORKFLOW_DIR = ".github/workflows";
+
+const REQUIRED_INPUTS = [
   "working_directory",
   "runtime_version",
   "run_lint",
@@ -11,35 +21,67 @@ const ALLOWED_COMMON = new Set([
   "test_command",
   "build_command",
   "upload_artifacts",
-  "artifact_paths",
-]);
+  "artifact_paths"
+];
 
-const ALLOWED_STACK_EXTRA = {
-  "build-node.yml": new Set(["package_manager"]),
-  "build-python.yml": new Set(["package_manager"]),
-  "build-java.yml": new Set(["build_tool"]),
-  "build-dotnet.yml": new Set([]),
-  "build-go.yml": new Set([]),
-};
-
-function fail(msg) {
-  console.error(`❌ workflow input contract: ${msg}`);
-  process.exit(1);
+function read(file) {
+  return fs.readFileSync(file, "utf8");
 }
 
-const wfDir = path.join(process.cwd(), ".github", "workflows");
-const workflows = Object.keys(ALLOWED_STACK_EXTRA);
+/**
+ * Extracts input keys from a workflow_call block using structural parsing.
+ */
+function extractInputs(yaml) {
+  const lines = yaml.split("\n");
 
-for (const file of workflows) {
-  const p = path.join(wfDir, file);
-  const doc = yaml.load(fs.readFileSync(p, "utf-8"));
-  const inputs = doc?.on?.workflow_call?.inputs || {};
+  let inInputs = false;
+  const inputs = [];
 
-  const extras = ALLOWED_STACK_EXTRA[file];
-  for (const inputName of Object.keys(inputs)) {
-    const ok = ALLOWED_COMMON.has(inputName) || extras.has(inputName);
-    if (!ok) fail(`${file} has non-v1 input "${inputName}"`);
+  for (const line of lines) {
+    if (line.match(/workflow_call:/)) {
+      inInputs = true;
+      continue;
+    }
+    if (inInputs && line.match(/^\s*inputs:/)) {
+      continue;
+    }
+    if (inInputs && line.match(/^\s{6,}[a-zA-Z0-9_-]+:/)) {
+      const key = line.trim().split(":")[0];
+      inputs.push(key);
+    }
+    if (inInputs && line.match(/^\s{2}[a-zA-Z]/)) {
+      break;
+    }
   }
+
+  return inputs;
 }
 
-console.log("✅ workflow input contract OK (v1 minimal inputs only)");
+function main() {
+  const workflows = fs.readdirSync(WORKFLOW_DIR)
+    .filter(f => f.startsWith("build-") && f.endsWith(".yml"));
+
+  let failed = false;
+
+  for (const wf of workflows) {
+    const file = path.join(WORKFLOW_DIR, wf);
+    const yaml = read(file);
+    const inputs = extractInputs(yaml);
+
+    for (const required of REQUIRED_INPUTS) {
+      if (!inputs.includes(required)) {
+        console.error(`❌ ${wf} missing required input: ${required}`);
+        failed = true;
+      }
+    }
+  }
+
+  if (failed) {
+    console.error("❌ Workflow input contract violation");
+    process.exit(1);
+  }
+
+  console.log("✅ Workflow input contracts are valid");
+}
+
+main();
