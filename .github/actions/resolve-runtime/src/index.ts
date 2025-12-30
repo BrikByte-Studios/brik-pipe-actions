@@ -1,24 +1,3 @@
-/**
- * BrikByteOS — resolve-runtime action
- *
- * Loads the canonical runtime matrix (inside brik-pipe-actions) and resolves:
- * - runtime_version: caller override OR matrix defaultVersion
- * - support_status: supported|experimental|planned
- * - package_manager_default: toolchain.packageManagers.default (if present)
- * - build_tool_default: toolchain.buildTools.default (if present)
- *
- * Critical detail:
- *   We MUST NOT use GITHUB_WORKSPACE for reading the matrix, because
- *   GITHUB_WORKSPACE points to the *caller repo* workspace (e.g. brik-pipe-examples).
- *
- * Instead:
- *   Use GITHUB_ACTION_PATH (this action’s directory), walk up to the action repo root,
- *   then read docs/pipelines/runtime-matrix.yml from *brik-pipe-actions*.
- *
- * Bundling:
- *   This action must be dependency-bundled (via ncc) so it runs with zero installs in CI.
- */
-
 import * as core from "@actions/core";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,27 +5,48 @@ import yaml from "js-yaml";
 
 type RuntimeName = "node" | "python" | "java" | "dotnet" | "go";
 
-function resolveActionRepoRoot(): string {
+function resolveActionDir(): string {
   /**
-   * GITHUB_ACTION_PATH points to the folder containing action.yml, e.g.:
-   *   .../_actions/BrikByte-Studios/brik-pipe-actions/main/.github/actions/resolve-runtime
+   * Preferred (sometimes present):
+   *   GITHUB_ACTION_PATH => folder that contains action.yml
    *
-   * Repo root is 3 levels up:
-   *   resolve-runtime -> actions -> .github -> repo root
+   * Reliable fallback for JS actions:
+   *   __dirname => .../.github/actions/resolve-runtime/dist
+   *   so action dir is one level up from dist/
    */
-  const actionPath = process.env.GITHUB_ACTION_PATH;
-  if (!actionPath) throw new Error("GITHUB_ACTION_PATH is not set (expected in GitHub Actions runtime).");
-  return path.resolve(actionPath, "../../..");
+  const envActionPath = process.env.GITHUB_ACTION_PATH;
+  if (envActionPath && envActionPath.trim().length > 0) return envActionPath;
+
+  // ncc bundles into dist/index.js; __dirname points at dist/
+  return path.resolve(__dirname, "..");
 }
 
-function loadMatrixFromActionRepo(): any {
-  const repoRoot = resolveActionRepoRoot();
-  const matrixPath = path.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml");
+function resolveActionRepoRoot(): string {
+  /**
+   * actionDir:
+   *   .../.github/actions/resolve-runtime
+   *
+   * repoRoot is 3 levels up:
+   *   resolve-runtime -> actions -> .github -> repo root
+   */
+  const actionDir = resolveActionDir();
+  return path.resolve(actionDir, "../../..");
+}
 
-  if (!fs.existsSync(matrixPath)) {
+function loadMatrix(): any {
+  const repoRoot = resolveActionRepoRoot();
+
+  // Try both canonical locations (pick ONE and standardize later).
+  const candidates = [
+    path.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml"),
+    path.join(repoRoot, "internal", "vendor", "runtime-matrix.yml"),
+  ];
+
+  const matrixPath = candidates.find((p) => fs.existsSync(p));
+  if (!matrixPath) {
     throw new Error(
-      `runtime-matrix.yml not found at: ${matrixPath}\n` +
-        `Fix: ensure brik-pipe-actions contains docs/pipelines/runtime-matrix.yml at that path.`
+      `runtime-matrix.yml not found.\nTried:\n- ${candidates.join("\n- ")}\n` +
+        `Fix: ensure the matrix is committed in brik-pipe-actions at one of those paths.`
     );
   }
 
@@ -65,7 +65,7 @@ function main() {
   const runtimeName = core.getInput("runtime_name", { required: true }) as RuntimeName;
   const override = (core.getInput("runtime_version") || "").trim();
 
-  const matrix = loadMatrixFromActionRepo();
+  const matrix = loadMatrix();
   const stack = findStack(matrix, runtimeName);
 
   const runtimeVersion = override.length > 0 ? override : String(stack.defaultVersion || "");
