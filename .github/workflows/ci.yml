@@ -1,0 +1,25 @@
+name: brik-pipe-actions — CI & Governance
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  governance:
+    name: Governance gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------------
+      # PIPE-CORE-1.1 Governance Gates
+      # ----------------------------------------------------------------------
+
+    #   - name: Validate runtime matrix (schema + policy)
+    #     run: node scripts/validate-runtime-matrix.mjs
+
+      - name: Enforce build-workflow v1 input contract
+        run: node scripts/check-workflow-inputs.mjs
