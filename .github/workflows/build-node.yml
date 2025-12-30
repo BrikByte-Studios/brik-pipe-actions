@@ -193,10 +193,23 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
         run: |
           set -euo pipefail
+
+          # If user explicitly provided a lint command, use it.
           CMD="${{ inputs.lint_command }}"
-          if [ -z "$CMD" ]; then CMD="npm run lint"; fi
+
+          # Auto-detect lint script only if no override supplied
+          if [ -z "$CMD" ]; then
+            if npm pkg get scripts.lint >/dev/null 2>&1; then
+              CMD="npm run lint"
+            else
+              echo "No lint script found → skipping lint"
+              exit 0
+            fi
+          fi
+
           echo "Lint: $CMD"
           bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/lint.log"
+
 
       # -----------------------------------------------------------------------
       # 6) Test step (default on)
