@@ -22,4 +22,5 @@ outputs:
 
 runs:
   using: "node20"
+  # NOTE: dist/index.js must be committed (composite actions don't install deps).
   main: "dist/index.js"
