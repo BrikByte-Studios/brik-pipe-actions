@@ -1,0 +1,278 @@
+# -----------------------------------------------------------------------------
+# BrikByteOS Pipelines — Reusable Workflow: build-python (v1)
+#
+# "Docstring" (Purpose / Contract):
+#   This reusable workflow provides the canonical BrikByte build sequence for
+#   Python repositories as part of PIPE-CORE-1.1.2 (Build Automation v1).
+#
+# What it guarantees:
+#   1) Deterministic build sequence: install -> lint? -> test? -> build
+#   2) Python version selection from the canonical runtime matrix (vendored into this repo)
+#   3) Package manager selection (pip|poetry) with predictable defaults
+#   4) Audit-ready build evidence emitted to: .audit/PIPE-BUILD/
+#   5) Evidence export runs even when earlier steps fail (if: always())
+#
+# Who calls this:
+#   Any repo can call it via workflow_call, e.g.:
+#     jobs:
+#       build:
+#         uses: BrikByte-Studios/brik-pipe-actions/.github/workflows/build-python.yml@v1
+#         with:
+#           working_directory: "."
+#           runtime_version: "3.12"        # optional override (defaults from runtime matrix)
+#           package_manager: "poetry"      # optional (defaults from runtime matrix)
+#           run_lint: true
+#
+# Inputs:
+#   - working_directory: repo subdir to run commands in (monorepo-friendly)
+#   - runtime_version: override Python version (default resolved from matrix)
+#   - package_manager: pip|poetry (optional; default resolved from matrix)
+#   - run_lint: toggle lint (off by default for v1)
+#   - run_tests: toggle tests (on by default for v1)
+#   - lint_command/test_command/build_command: optional command overrides
+#   - upload_artifacts: upload .audit evidence as run artifact
+#   - artifact_paths: comma-separated outputs captured in evidence summary
+#
+# Outputs:
+#   - build_verdict: pass|fail
+#   - runtime_used: resolved Python version actually used
+#   - audit_bundle_path: where evidence was written (typically .audit/PIPE-BUILD)
+#
+# Python-specific notes:
+#   - pip mode assumes requirements.txt exists at working_directory (common baseline).
+#   - poetry mode installs poetry via pip, then runs poetry install.
+#   - Default lint uses ruff; if the repo doesn't use ruff, override lint_command or disable lint.
+#   - Default "build" is compileall for v1 (packaging/wheels handled later in packaging milestone).
+# -----------------------------------------------------------------------------
+
+name: "brik: build-python (v1)"
+
+on:
+  workflow_call:
+    inputs:
+      # Path to execute commands from. Useful for monorepos or nested services.
+      working_directory: { type: string, default: "." }
+
+      # Optional override for Python runtime version. If blank, resolve from runtime-matrix.yml.
+      runtime_version: { type: string, default: "" }
+
+      # Optional override for package manager choice.
+      # Allowed: pip | poetry
+      # If blank, resolve from runtime-matrix.yml.
+      package_manager: { type: string, default: "" } # pip|poetry (defaults from matrix)
+
+      # Lint step toggle (disabled by default for v1).
+      run_lint: { type: boolean, default: false }
+
+      # Test step toggle (enabled by default for v1).
+      run_tests: { type: boolean, default: true }
+
+      # Optional overrides. If empty, canonical defaults are used.
+      lint_command: { type: string, default: "" }
+      test_command: { type: string, default: "" }
+      build_command: { type: string, default: "" }
+
+      # Upload evidence (.audit) as a workflow artifact.
+      upload_artifacts: { type: boolean, default: true }
+
+      # Used for evidence summarization (not publishing artifacts in v1).
+      artifact_paths: { type: string, default: "__pycache__" }
+
+    outputs:
+      # Caller-friendly outputs: keep consistent across all stacks.
+      build_verdict: { value: ${{ jobs.build.outputs.build_verdict }} }
+      runtime_used: { value: ${{ jobs.build.outputs.runtime_used }} }
+      audit_bundle_path: { value: ${{ jobs.build.outputs.audit_bundle_path }} }
+
+jobs:
+  build:
+    # Runner baseline for v1.
+    runs-on: ubuntu-latest
+
+    outputs:
+      # Expose a simple pass/fail result for the caller workflow.
+      build_verdict: ${{ steps.verdict.outputs.build_verdict }}
+
+      # Propagate the resolved Python runtime version.
+      runtime_used: ${{ steps.resolve.outputs.runtime_version }}
+
+      # Propagate the evidence path from the exporter action.
+      audit_bundle_path: ${{ steps.evidence.outputs.audit_bundle_path }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1) Checkout repository
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2) Resolve runtime defaults using the canonical runtime matrix
+      #    - Reads vendored runtime-matrix.yml in this repo
+      #    - Applies override if inputs.runtime_version is provided
+      #    - Returns package_manager_default for Python from the matrix
+      # -----------------------------------------------------------------------
+      - name: Resolve runtime defaults (matrix)
+        id: resolve
+        uses: ./.github/actions/resolve-runtime
+        with:
+          runtime_name: python
+          runtime_version: ${{ inputs.runtime_version }}
+
+      # -----------------------------------------------------------------------
+      # 3) Setup Python using resolved runtime
+      # -----------------------------------------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.resolve.outputs.runtime_version }}
+
+      # -----------------------------------------------------------------------
+      # 4) Install dependencies
+      #    - Choose package manager based on:
+      #        1) inputs.package_manager (if provided)
+      #        2) resolve.outputs.package_manager_default (from runtime matrix)
+      #    - Logs are captured for evidence export.
+      # -----------------------------------------------------------------------
+      - name: Install
+        id: install
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          PM="${{ inputs.package_manager }}"
+          # If caller didn't pick a package manager, use matrix default.
+          if [ -z "$PM" ]; then PM="${{ steps.resolve.outputs.package_manager_default }}"; fi
+          echo "Using package manager: $PM"
+
+          if [ "$PM" = "pip" ]; then
+            # Baseline convention: requirements.txt at working_directory.
+            python -m pip install -r requirements.txt 2>&1 | tee "$RUNNER_TEMP/build-install.log"
+          elif [ "$PM" = "poetry" ]; then
+            # v1 convenience: install poetry, then install dependencies.
+            python -m pip install poetry
+            poetry install --no-interaction --no-ansi 2>&1 | tee "$RUNNER_TEMP/build-install.log"
+          else
+            # Fail fast on unsupported values to avoid ambiguous template behavior.
+            echo "Unsupported package_manager: $PM"; exit 2
+          fi
+
+      # -----------------------------------------------------------------------
+      # 5) Lint step (optional)
+      #    - Default command:
+      #        python -m ruff check .
+      #    - Repos can override lint_command or disable lint.
+      # -----------------------------------------------------------------------
+      - name: Lint (optional)
+        id: lint
+        if: ${{ inputs.run_lint }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.lint_command }}"
+          if [ -z "$CMD" ]; then CMD="python -m ruff check ."; fi
+          echo "Lint: $CMD"
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/lint.log"
+
+      # -----------------------------------------------------------------------
+      # 6) Test step (default on)
+      #    - Default command:
+      #        python -m pytest -q
+      # -----------------------------------------------------------------------
+      - name: Test (default on)
+        id: test
+        if: ${{ inputs.run_tests }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.test_command }}"
+          if [ -z "$CMD" ]; then CMD="python -m pytest -q"; fi
+          echo "Test: $CMD"
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      # -----------------------------------------------------------------------
+      # 7) Build step (always runs in v1)
+      #    - Default command is a minimal compilation sanity check:
+      #        python -m compileall .
+      # -----------------------------------------------------------------------
+      - name: Build
+        id: buildstep
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.build_command }}"
+          if [ -z "$CMD" ]; then CMD="python -m compileall ."; fi
+          echo "Build: $CMD"
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # -----------------------------------------------------------------------
+      # 8) Export build evidence (ALWAYS)
+      #    - Must run even when earlier steps fail to prevent audit gaps.
+      #    - Writes: .audit/PIPE-BUILD/*
+      # -----------------------------------------------------------------------
+      - name: Export build evidence (.audit)
+        id: evidence
+        if: always()
+        uses: ./.github/actions/export-build-evidence
+        with:
+          # Stack identifier for evidence & downstream reasoning.
+          stack: "python"
+
+          # The resolved Python version actually used.
+          runtime_used: "${{ steps.resolve.outputs.runtime_version }}"
+
+          # Capture package manager selection into evidence.
+          toolchain: "packageManager=${{ inputs.package_manager || steps.resolve.outputs.package_manager_default }}"
+
+          # Important for monorepos/nested apps: where commands were executed.
+          working_directory: "${{ inputs.working_directory }}"
+
+          # Record which steps were intended to run.
+          lint_ran: "${{ inputs.run_lint }}"
+          test_ran: "${{ inputs.run_tests }}"
+          build_ran: "true"
+
+          # Map GitHub outcomes to simple codes (schema-friendly).
+          lint_exit_code: "${{ steps.lint.outcome == 'success' && '0' || steps.lint.outcome == 'skipped' && '' || '1' }}"
+          test_exit_code: "${{ steps.test.outcome == 'success' && '0' || steps.test.outcome == 'skipped' && '' || '1' }}"
+          build_exit_code: "${{ steps.buildstep.outcome == 'success' && '0' || '1' }}"
+
+          # Logs captured in runner temp. Exporter copies them into .audit.
+          lint_log: "${{ runner.temp }}/lint.log"
+          test_log: "${{ runner.temp }}/test.log"
+          build_log: "${{ runner.temp }}/build.log"
+
+          # Build output locations for evidence summarization.
+          artifact_paths: "${{ inputs.artifact_paths }}"
+
+      # -----------------------------------------------------------------------
+      # 9) Upload evidence artifact (optional)
+      #    - Uses always() so evidence is available even on failures.
+      # -----------------------------------------------------------------------
+      - name: Upload .audit bundle
+        if: ${{ inputs.upload_artifacts && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: "audit-pipe-build-python"
+          path: .audit/PIPE-BUILD
+
+      # -----------------------------------------------------------------------
+      # 10) Final verdict (ALWAYS)
+      #     - Build must succeed.
+      #     - Lint/tests may be skipped and still pass.
+      # -----------------------------------------------------------------------
+      - name: Final verdict
+        id: verdict
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.buildstep.outcome }}" = "success" ] && \
+             ( [ "${{ steps.test.outcome }}" = "success" ] || [ "${{ steps.test.outcome }}" = "skipped" ] ) && \
+             ( [ "${{ steps.lint.outcome }}" = "success" ] || [ "${{ steps.lint.outcome }}" = "skipped" ] ); then
+            echo "build_verdict=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_verdict=fail" >> "$GITHUB_OUTPUT"
+          fi

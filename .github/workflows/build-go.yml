@@ -1,0 +1,262 @@
+# -----------------------------------------------------------------------------
+# BrikByteOS Pipelines — Reusable Workflow: build-go (v1)
+#
+# "Docstring" (Purpose / Contract):
+#   This reusable workflow provides the canonical BrikByte build sequence for Go
+#   repositories as part of PIPE-CORE-1.1.2 (Build Automation v1).
+#
+# What it guarantees:
+#   1) Deterministic build sequence: install -> lint? -> test? -> build
+#   2) Go version selection from the canonical runtime matrix (vendored into this repo)
+#   3) Audit-ready build evidence emitted to: .audit/PIPE-BUILD/
+#   4) Evidence export runs even if lint/test/build fails (if: always())
+#
+# Who calls this:
+#   Any repo can call it via workflow_call, e.g.:
+#     jobs:
+#       build:
+#         uses: BrikByte-Studios/brik-pipe-actions/.github/workflows/build-go.yml@v1
+#         with:
+#           working_directory: "."
+#           runtime_version: "1.22.x"   # optional override
+#           run_lint: true             # optional
+#
+# Inputs:
+#   - working_directory: repo subdir to run commands in (monorepo support)
+#   - runtime_version: override Go version (default resolved from matrix)
+#   - run_lint: toggle lint step (golangci-lint by default)
+#   - run_tests: toggle tests (enabled by default for v1)
+#   - lint_command/test_command/build_command: optional command overrides
+#   - upload_artifacts: upload .audit evidence as a run artifact
+#   - artifact_paths: comma-separated build outputs captured in evidence summary
+#
+# Outputs:
+#   - build_verdict: pass|fail (simple caller-friendly status)
+#   - runtime_used: the resolved Go version actually used
+#   - audit_bundle_path: where evidence was written (typically .audit/PIPE-BUILD)
+#
+# Notes (Go-specific):
+#   - Default install step uses `go mod download` (assumes Go modules)
+#   - Default test uses `-count=1` to reduce test caching flakiness (determinism)
+#   - Lint uses golangci-lint, which must be available (set up by later hardening
+#     or installed in the calling repo/tooling). In v1 it is optional (run_lint).
+# -----------------------------------------------------------------------------
+
+name: "brik: build-go (v1)"
+
+on:
+  # Reusable workflows are invoked by other workflows using "uses:".
+  workflow_call:
+    inputs:
+      # Path to execute build commands from. Supports monorepos or nested services.
+      working_directory: { type: string, default: "." }
+
+      # Optional override for the Go version. If blank, resolve from runtime-matrix.yml.
+      runtime_version: { type: string, default: "" }
+
+      # Lint step toggle (golangci-lint by default).
+      run_lint: { type: boolean, default: false }
+
+      # Test step toggle (enabled by default for v1).
+      run_tests: { type: boolean, default: true }
+
+      # Optional overrides. If empty, canonical defaults are used.
+      lint_command: { type: string, default: "" }
+      test_command: { type: string, default: "" }
+      build_command: { type: string, default: "" }
+
+      # Upload evidence (.audit) as a workflow artifact.
+      upload_artifacts: { type: boolean, default: true }
+
+      # Used only for evidence summarization (not for publishing artifacts in v1).
+      # Comma-separated list to avoid YAML array parsing complexity in workflow_call.
+      artifact_paths: { type: string, default: "bin" }
+
+    outputs:
+      # Returned to caller as a workflow output (maps from the job's outputs).
+      build_verdict: { value: ${{ jobs.build.outputs.build_verdict }} }
+
+      # The resolved runtime actually used (important for audits and debugging drift).
+      runtime_used: { value: ${{ jobs.build.outputs.runtime_used }} }
+
+      # Where evidence is written (caller can reference or upload it).
+      audit_bundle_path: { value: ${{ jobs.build.outputs.audit_bundle_path }} }
+
+jobs:
+  build:
+    # Runner baseline for v1. Can be tightened later via runner policy packs.
+    runs-on: ubuntu-latest
+
+    outputs:
+      # Expose a simple pass/fail result for the caller.
+      build_verdict: ${{ steps.verdict.outputs.build_verdict }}
+
+      # Propagate the resolved runtime from the resolve step.
+      runtime_used: ${{ steps.resolve.outputs.runtime_version }}
+
+      # Propagate the evidence path from the evidence exporter action.
+      audit_bundle_path: ${{ steps.evidence.outputs.audit_bundle_path }}
+
+    steps:
+      # -----------------------------------------------------------------------
+      # 1) Checkout repository
+      # -----------------------------------------------------------------------
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # 2) Resolve runtime defaults using the canonical runtime matrix
+      #    - Reads vendored runtime-matrix.yml within this repo
+      #    - Applies override if inputs.runtime_version is provided
+      # -----------------------------------------------------------------------
+      - name: Resolve runtime defaults (matrix)
+        id: resolve
+        uses: ./.github/actions/resolve-runtime
+        with:
+          runtime_name: go
+          runtime_version: ${{ inputs.runtime_version }}
+
+      # -----------------------------------------------------------------------
+      # 3) Setup Go toolchain using the resolved runtime
+      #    - go-version is resolved from runtime matrix defaults unless overridden
+      # -----------------------------------------------------------------------
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ steps.resolve.outputs.runtime_version }}
+
+      # -----------------------------------------------------------------------
+      # 4) Install / deps step (canonical: go mod download)
+      #    - Assumes Go Modules are used (v1 standard)
+      #    - Logs are captured into $RUNNER_TEMP so they can be copied into .audit later
+      # -----------------------------------------------------------------------
+      - name: Install
+        id: install
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          go mod download 2>&1 | tee "$RUNNER_TEMP/build-install.log"
+
+      # -----------------------------------------------------------------------
+      # 5) Lint step (optional)
+      #    - Default: golangci-lint run ./...
+      #    - Only runs if inputs.run_lint == true
+      # -----------------------------------------------------------------------
+      - name: Lint (optional)
+        id: lint
+        if: ${{ inputs.run_lint }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.lint_command }}"
+          # If no override is provided, use canonical v1 default.
+          if [ -z "$CMD" ]; then CMD="golangci-lint run ./..."; fi
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/lint.log"
+
+      # -----------------------------------------------------------------------
+      # 6) Test step (default on)
+      #    - Default: go test ./... -count=1
+      #      -count=1 reduces caching effects and makes test runs more deterministic
+      #    - Only runs if inputs.run_tests == true
+      # -----------------------------------------------------------------------
+      - name: Test (default on)
+        id: test
+        if: ${{ inputs.run_tests }}
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.test_command }}"
+          # If no override is provided, use canonical v1 default.
+          if [ -z "$CMD" ]; then CMD="go test ./... -count=1"; fi
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      # -----------------------------------------------------------------------
+      # 7) Build step (always runs in v1)
+      #    - Default: go build ./...
+      # -----------------------------------------------------------------------
+      - name: Build
+        id: buildstep
+        shell: bash
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          set -euo pipefail
+          CMD="${{ inputs.build_command }}"
+          # If no override is provided, use canonical v1 default.
+          if [ -z "$CMD" ]; then CMD="go build ./..."; fi
+          bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # -----------------------------------------------------------------------
+      # 8) Export build evidence (ALWAYS)
+      #    - Must run even when earlier steps fail to avoid audit gaps.
+      #    - Writes: .audit/PIPE-BUILD/{metadata,runtime,commands,results,...}
+      # -----------------------------------------------------------------------
+      - name: Export build evidence (.audit)
+        id: evidence
+        if: always()
+        uses: ./.github/actions/export-build-evidence
+        with:
+          # Stack identifier for evidence + downstream reasoning.
+          stack: "go"
+
+          # The resolved runtime version actually used.
+          runtime_used: "${{ steps.resolve.outputs.runtime_version }}"
+
+          # Toolchain string is intentionally simple v1 metadata.
+          toolchain: "buildTool=go"
+
+          # Important for monorepos: where commands were executed.
+          working_directory: "${{ inputs.working_directory }}"
+
+          # Record which steps were intended to run.
+          lint_ran: "${{ inputs.run_lint }}"
+          test_ran: "${{ inputs.run_tests }}"
+          build_ran: "true"
+
+          # Step outcomes are mapped to simple "exit codes" for evidence.
+          # Note: GitHub does not expose literal exit codes; outcome is success/failure/skipped.
+          lint_exit_code: "${{ steps.lint.outcome == 'success' && '0' || steps.lint.outcome == 'skipped' && '' || '1' }}"
+          test_exit_code: "${{ steps.test.outcome == 'success' && '0' || steps.test.outcome == 'skipped' && '' || '1' }}"
+          build_exit_code: "${{ steps.buildstep.outcome == 'success' && '0' || '1' }}"
+
+          # Logs captured in runner temp. Exporter action copies them into .audit.
+          lint_log: "${{ runner.temp }}/lint.log"
+          test_log: "${{ runner.temp }}/test.log"
+          build_log: "${{ runner.temp }}/build.log"
+
+          # Build output locations (for summary / teaching). Not used for publish in v1.
+          artifact_paths: "${{ inputs.artifact_paths }}"
+
+      # -----------------------------------------------------------------------
+      # 9) Upload evidence artifact (optional)
+      #    - Uses always() to ensure evidence is uploaded even if build failed.
+      # -----------------------------------------------------------------------
+      - name: Upload .audit bundle
+        if: ${{ inputs.upload_artifacts && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: "audit-pipe-build-go"
+          path: .audit/PIPE-BUILD
+
+      # -----------------------------------------------------------------------
+      # 10) Final verdict (ALWAYS)
+      #     - Produces pass/fail used by caller for gating or reporting.
+      #     - Tests/lint may be skipped and still pass.
+      # -----------------------------------------------------------------------
+      - name: Final verdict
+        id: verdict
+        if: always()
+        shell: bash
+        run: |
+          # "Pass" means:
+          # - build succeeded AND
+          # - tests succeeded OR were intentionally skipped AND
+          # - lint succeeded OR was intentionally skipped
+          if [ "${{ steps.buildstep.outcome }}" = "success" ] && \
+             ( [ "${{ steps.test.outcome }}" = "success" ] || [ "${{ steps.test.outcome }}" = "skipped" ] ) && \
+             ( [ "${{ steps.lint.outcome }}" = "success" ] || [ "${{ steps.lint.outcome }}" = "skipped" ] ); then
+            echo "build_verdict=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_verdict=fail" >> "$GITHUB_OUTPUT"
+          fi

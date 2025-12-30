@@ -1,0 +1,59 @@
+name: "Export Build Evidence"
+description: "Writes deterministic build evidence into .audit/PIPE-BUILD/*"
+inputs:
+  stack:
+    description: "node|python|java|dotnet|go"
+    required: true
+  runtime_used:
+    description: "Resolved runtime version used in the workflow"
+    required: true
+  toolchain:
+    description: "Toolchain descriptor (string)"
+    required: true
+  working_directory:
+    description: "Working directory used for commands"
+    required: false
+    default: "."
+  lint_ran:
+    description: "true/false"
+    required: true
+  test_ran:
+    description: "true/false"
+    required: true
+  build_ran:
+    description: "true/false"
+    required: true
+  lint_exit_code:
+    description: "Exit code for lint step (or empty)"
+    required: false
+    default: ""
+  test_exit_code:
+    description: "Exit code for test step (or empty)"
+    required: false
+    default: ""
+  build_exit_code:
+    description: "Exit code for build step (or empty)"
+    required: false
+    default: ""
+  lint_log:
+    description: "Path to lint.log"
+    required: false
+    default: ""
+  test_log:
+    description: "Path to test.log"
+    required: false
+    default: ""
+  build_log:
+    description: "Path to build.log"
+    required: false
+    default: ""
+  artifact_paths:
+    description: "Comma-separated artifact paths"
+    required: false
+    default: ""
+outputs:
+  audit_bundle_path:
+    description: "Path to .audit/PIPE-BUILD"
+runs:
+  using: "node20"
+  main: "index.mjs"
