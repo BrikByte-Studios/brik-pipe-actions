@@ -1,0 +1,207 @@
+################################################################################
+# BrikByteOS Universal .gitignore
+# Applies to brik-pipe-cli, brik-pipe-packs, brik-pipe-actions,
+# brik-pipe-docs, brik-pipe-examples, brikbyte-org-governance,
+# brik-pipe-observability, brik-pipe-integrations, etc.
+################################################################################
+
+###############################################
+# Node / TypeScript
+###############################################
+node_modules/
+dist/
+build/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+tmp/
+temp/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# PM2 logs
+.pids
+*.pid
+*.pid.lock
+
+###############################################
+# Python
+###############################################
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+wheels/
+pip-wheel-metadata/
+.cache/
+.pytest_cache/
+.venv/
+venv/
+
+###############################################
+# Java / Maven / Gradle
+###############################################
+target/
+out/
+*.class
+*.log
+
+# Gradle
+.gradle/
+build/
+
+# Local IDE (Eclipse/IntelliJ)
+*.iml
+.idea/
+.project
+.settings/
+.classpath
+
+###############################################
+# .NET / C#
+###############################################
+bin/
+obj/
+*.user
+*.suo
+*.csproj.user
+
+# Generated test results
+TestResult*/
+*.trx
+*.coverage
+*.coveragexml
+
+###############################################
+# Go
+###############################################
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Build caches
+go.work
+go.work.sum
+
+###############################################
+# Docker
+###############################################
+.docker/
+docker-cache/
+docker-compose.override.yml
+
+###############################################
+# Documentation (Docusaurus, Next.js)
+###############################################
+.docusaurus/
+.build/
+.next/
+.cache/
+static/build/
+website/build/
+
+###############################################
+# GitHub Actions / CI
+###############################################
+# Composite action build outputs
+github-actions-build/
+action-dist/
+
+# Local or generated workflow artifacts
+.github/workflows/generated/
+.github/actions/**/dist/
+
+###############################################
+# Packs & Templates
+###############################################
+# Any generated pipeline packs
+packs/**/generated/
+packs/**/dist/
+packs/tmp/
+
+###############################################
+# CLI Artifacts (brik-pipe-cli)
+###############################################
+.brikpipe/
+cli-cache/
+local-cache/
+
+###############################################
+# Observability (Grafana, Loki, Tempo)
+###############################################
+grafana-data/
+loki-data/
+tempo-data/
+otel-data/
+*.db
+*.json.tmp
+
+###############################################
+# Integrations / Webhook Listeners
+###############################################
+# Node/Python service artifacts
+integration-service/logs/
+integration-service/tmp/
+integration-service/.cache/
+
+###############################################
+# Audit System (.audit bundles)
+###############################################
+# CI export bundles should NOT be versioned
+.audit/
+audit-out/
+pipeline-audit/
+audit-snapshots/
+
+###############################################
+# OS + Editor Files
+###############################################
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+###############################################
+# IDE / Editor Metadata
+###############################################
+.vscode/
+.vscode-test/
+.idea/
+*.swp
+*.swo
+*.orig
+*.tmp
+
+###############################################
+# Misc
+###############################################
+*.local
+*.backup
+*.bak
+*.tmp
+*.log
