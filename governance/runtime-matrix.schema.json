@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brikbyte.studio/schemas/runtime-matrix.schema.json",
+  "title": "BrikByteOS Runtime & Toolchain Matrix",
+  "type": "object",
+  "required": ["schemaVersion", "stacks", "runnerRequirements", "policy", "owner", "lastUpdated"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "lastUpdated": { "type": "string", "minLength": 8 },
+    "owner": { "type": "string", "minLength": 2 },
+    "policy": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "quarterlyReview": { "type": "boolean" },
+        "upgradeCadence": { "type": "string" },
+        "enforcementNotes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "runnerRequirements": {
+      "type": "object",
+      "required": ["github"],
+      "properties": {
+        "github": {
+          "type": "object",
+          "required": ["defaultRunner", "allowedRunners"],
+          "properties": {
+            "defaultRunner": { "type": "string" },
+            "allowedRunners": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "stacks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "runtime",
+          "supportedVersions",
+          "defaultVersion",
+          "supportStatus",
+          "toolchain",
+          "defaultCommands",
+          "projectConventions",
+          "deprecationPolicy",
+          "notes"
+        ],
+        "properties": {
+          "runtime": {
+            "type": "object",
+            "required": ["name", "displayName"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": ["node", "python", "java", "dotnet", "go"]
+              },
+              "displayName": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "supportedVersions": {
+            "type": "object",
+            "required": ["policy", "versions"],
+            "properties": {
+              "policy": { "type": "string" },
+              "versions": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string" }
+              }
+            },
+            "additionalProperties": false
+          },
+          "defaultVersion": { "type": "string", "minLength": 1 },
+          "supportStatus": {
+            "type": "string",
+            "enum": ["supported", "experimental", "planned"]
+          },
+          "toolchain": {
+            "type": "object",
+            "required": ["packageManagers", "buildTools"],
+            "properties": {
+              "packageManagers": {
+                "type": "object",
+                "required": ["default", "allowed"],
+                "properties": {
+                  "default": { "type": "string" },
+                  "allowed": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string" }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "buildTools": {
+                "type": "object",
+                "required": ["default", "allowed"],
+                "properties": {
+                  "default": { "type": "string" },
+                  "allowed": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string" }
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "defaultCommands": {
+            "type": "object",
+            "required": ["install", "test", "build"],
+            "properties": {
+              "install": { "type": "string" },
+              "lint": { "type": "string" },
+              "test": { "type": "string" },
+              "build": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "projectConventions": {
+            "type": "object",
+            "required": ["directories", "buildOutput"],
+            "properties": {
+              "directories": {
+                "type": "object",
+                "required": ["source", "tests"],
+                "properties": {
+                  "source": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string" }
+                  },
+                  "tests": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "type": "string" }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "buildOutput": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string" }
+              }
+            },
+            "additionalProperties": false
+          },
+          "deprecationPolicy": {
+            "type": "object",
+            "required": ["alignsToVendorEOL", "removalRule", "exceptionProcess"],
+            "properties": {
+              "alignsToVendorEOL": { "type": "boolean" },
+              "removalRule": { "type": "string" },
+              "exceptionProcess": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "notes": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

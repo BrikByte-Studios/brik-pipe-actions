@@ -1,0 +1,236 @@
+# BrikByteOS Pipelines — Runtime & Toolchain Matrix (Authoritative)
+#
+# Purpose:
+#   This file is the single source of truth for what “supported” means across
+#   BrikByteOS build automation stacks (v1).
+#
+# Consumers:
+#   - brik-pipe-actions (build templates + schema validation)
+#   - brik-pipe-cli (local validate)
+#
+# Policy:
+#   - LTS-first
+#   - Support N and N-1 (where feasible)
+#   - Deprecation tracked explicitly
+# -----------------------------------------------------------------------------
+
+schemaVersion: 1
+lastUpdated: "2025-12-30"
+owner: "Platform Engineering"
+policy:
+  name: "LTS-first, N/N-1"
+  description: >
+    Prefer vendor LTS releases. Support current LTS (N) and previous LTS (N-1)
+    where feasible. Older versions may be allowed only as experimental.
+  quarterlyReview: true
+  upgradeCadence: "Quarterly (or on major vendor lifecycle changes)"
+  enforcementNotes:
+    - "Main/release branches may enforce supported-only in future policy packs."
+    - "Experimental versions are allowed only for non-production packs unless explicitly approved."
+
+runnerRequirements:
+  github:
+    defaultRunner: "ubuntu-latest"
+    allowedRunners:
+      - "ubuntu-latest"
+      - "ubuntu-24.04"
+      - "ubuntu-22.04"
+
+stacks:
+  - runtime:
+      name: "node"
+      displayName: "Node.js"
+    supportedVersions:
+      policy: "N/N-1"
+      versions:
+        - "18.x"
+        - "20.x"
+    defaultVersion: "20.x"
+    supportStatus: "supported"
+    toolchain:
+      packageManagers:
+        default: "npm"
+        allowed:
+          - "npm"
+          - "pnpm"
+          - "yarn"
+      buildTools:
+        default: "npm"
+        allowed:
+          - "npm"
+          - "pnpm"
+          - "yarn"
+    defaultCommands:
+      install: "npm ci"
+      lint: "npm run lint"
+      test: "npm test"
+      build: "npm run build"
+    projectConventions:
+      directories:
+        source: ["src"]
+        tests: ["test", "tests", "__tests__"]
+      buildOutput:
+        - "dist"
+    deprecationPolicy:
+      alignsToVendorEOL: true
+      removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
+      exceptionProcess: "Mark as experimental + link issue/approval in notes."
+    notes:
+      - "Monorepo support is out-of-scope for v1; use workingDirectory overrides."
+      - "pnpm/yarn allowed via config; defaults remain npm."
+
+  - runtime:
+      name: "python"
+      displayName: "Python"
+    supportedVersions:
+      policy: "N/N-1"
+      versions:
+        - "3.11"
+        - "3.12"
+    defaultVersion: "3.12"
+    supportStatus: "supported"
+    toolchain:
+      packageManagers:
+        default: "pip"
+        allowed:
+          - "pip"
+          - "poetry"
+      buildTools:
+        default: "pip"
+        allowed:
+          - "pip"
+          - "poetry"
+    defaultCommands:
+      install: "python -m pip install -r requirements.txt"
+      lint: "python -m ruff check ."
+      test: "python -m pytest -q"
+      build: "python -m compileall ."
+    projectConventions:
+      directories:
+        source: ["src"]
+        tests: ["tests"]
+      buildOutput:
+        - "__pycache__"
+    deprecationPolicy:
+      alignsToVendorEOL: true
+      removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
+      exceptionProcess: "Mark as experimental + link issue/approval in notes."
+    notes:
+      - "Default lint uses ruff (fast + modern). Teams may override."
+      - "Build step for Python v1 is a minimal compile check; packaging is out-of-scope (PIPE-CORE-1.2/1.?.)."
+
+  - runtime:
+      name: "java"
+      displayName: "Java"
+    supportedVersions:
+      policy: "N/N-1"
+      versions:
+        - "17"
+        - "21"
+    defaultVersion: "21"
+    supportStatus: "supported"
+    toolchain:
+      packageManagers:
+        default: "maven"
+        allowed:
+          - "maven"
+          - "gradle"
+      buildTools:
+        default: "maven"
+        allowed:
+          - "maven"
+          - "gradle"
+    defaultCommands:
+      install: "mvn -B -DskipTests dependency:go-offline"
+      lint: "mvn -B -DskipTests verify"
+      test: "mvn -B test"
+      build: "mvn -B -DskipTests package"
+    projectConventions:
+      directories:
+        source: ["src/main/java"]
+        tests: ["src/test/java"]
+      buildOutput:
+        - "target"
+    deprecationPolicy:
+      alignsToVendorEOL: true
+      removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
+      exceptionProcess: "Mark as experimental + link issue/approval in notes."
+    notes:
+      - "Multi-module builds supported by running at repo root or configured workingDirectory."
+      - "Gradle allowed via config; defaults remain Maven."
+
+  - runtime:
+      name: "dotnet"
+      displayName: ".NET"
+    supportedVersions:
+      policy: "LTS-only"
+      versions:
+        - "8.0.x"
+    defaultVersion: "8.0.x"
+    supportStatus: "supported"
+    toolchain:
+      packageManagers:
+        default: "dotnet"
+        allowed:
+          - "dotnet"
+      buildTools:
+        default: "dotnet"
+        allowed:
+          - "dotnet"
+    defaultCommands:
+      install: "dotnet restore"
+      lint: "dotnet format --verify-no-changes"
+      test: "dotnet test --no-restore"
+      build: "dotnet build --no-restore -c Release"
+    projectConventions:
+      directories:
+        source: ["src"]
+        tests: ["test", "tests"]
+      buildOutput:
+        - "bin"
+        - "obj"
+    deprecationPolicy:
+      alignsToVendorEOL: true
+      removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
+      exceptionProcess: "Mark as experimental + link issue/approval in notes."
+    notes:
+      - ".NET v1 supports LTS-only to reduce ecosystem churn."
+      - "If legacy SDKs are needed, add as experimental with explicit exception approval."
+
+  - runtime:
+      name: "go"
+      displayName: "Go"
+    supportedVersions:
+      policy: "N/N-1"
+      versions:
+        - "1.22.x"
+        - "1.23.x"
+    defaultVersion: "1.22.x"
+    supportStatus: "supported"
+    toolchain:
+      packageManagers:
+        default: "gomod"
+        allowed:
+          - "gomod"
+      buildTools:
+        default: "go"
+        allowed:
+          - "go"
+    defaultCommands:
+      install: "go mod download"
+      lint: "golangci-lint run ./..."
+      test: "go test ./... -count=1"
+      build: "go build ./..."
+    projectConventions:
+      directories:
+        source: ["."]
+        tests: ["."]
+      buildOutput:
+        - "bin"
+    deprecationPolicy:
+      alignsToVendorEOL: true
+      removalRule: "Remove 1 quarter after vendor EOL unless exception approved."
+      exceptionProcess: "Mark as experimental + link issue/approval in notes."
+    notes:
+      - "golangci-lint requires setup in templates; may be optional via config."
+      - "Go build output is project-specific; packaging is out-of-scope for v1."
