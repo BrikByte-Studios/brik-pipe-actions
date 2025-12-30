@@ -85,15 +85,13 @@ on:
       artifact_paths: { type: string, default: "target" }
 
     outputs:
-      # Returned to caller as a workflow output (maps from the job's outputs).
-      build_verdict: { value: ${{ jobs.build.outputs.build_verdict }} }
-
-      # The resolved runtime actually used (important for audits and debugging drift).
-      runtime_used: { value: ${{ jobs.build.outputs.runtime_used }} }
-
-      # Where evidence is written (caller can reference or upload it).
-      audit_bundle_path: { value: ${{ jobs.build.outputs.audit_bundle_path }} }
-
+      # Caller-friendly outputs: keep consistent across all stacks.
+      build_verdict:
+        value: ${{ jobs.build.outputs.build_verdict }}
+      runtime_used:
+        value: ${{ jobs.build.outputs.runtime_used }}
+      audit_bundle_path:
+        value: ${{ jobs.build.outputs.audit_bundle_path }}
 jobs:
   build:
     # Runner baseline for v1. Can be tightened later via runner policy packs.
