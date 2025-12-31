@@ -39,13 +39,16 @@ const REQUIRED_INPUTS = new Set([
  * Allowlisted additional inputs per workflow.
  * Use this ONLY when a stack genuinely requires extra input (e.g. java build_tool).
  * If you add something here, treat it as a governance change and update ADR/contract.
+ *
+ * NOTE:
+ * - Do NOT repeat required inputs here. It’s harmless, but noisy.
  */
 const ALLOWED_EXTRAS_BY_WORKFLOW = {
-  "build-java.yml": new Set(["build_tool", "artifact_paths"]), // artifact_paths already required; harmless if repeated
-  "build-node.yml": new Set(["package_manager", "artifact_paths"]),
-  "build-python.yml": new Set(["package_manager", "artifact_paths"]),
-  "build-dotnet.yml": new Set(["artifact_paths"]),
-  "build-go.yml": new Set(["artifact_paths"]),
+  "build-java.yml": new Set(["build_tool"]),
+  "build-node.yml": new Set(["package_manager"]),
+  "build-python.yml": new Set(["package_manager"]),
+  "build-dotnet.yml": new Set([]),
+  "build-go.yml": new Set([]),
 };
 
 /**
@@ -56,161 +59,90 @@ function read(filePath) {
 }
 
 /**
- * Minimal structural YAML scanning to extract keys under:
- *   on:
- *     workflow_call:
- *       inputs:
- *         <key>:
- *
- * We do NOT parse YAML fully. We only:
- *   - Locate "workflow_call:" under "on:"
- *   - Locate "inputs:" under "workflow_call:"
- *   - Collect keys at the next indentation level
+ * Strict zero-deps scanner:
+ *  - Find `on:` block
+ *  - Find `workflow_call:` within `on:`
+ *  - Find `inputs:` within `workflow_call:`
+ *  - Determine direct child indentation under `inputs:`
+ *  - Collect only keys at that indentation (avoid nested `type:`, `default:` etc.)
  *
  * Returns:
- *   { ok: boolean, inputs: string[], error?: string }
+ *   { ok: true, inputs: string[] }
+ *   { ok: false, inputs: [], error: string }
  */
-function extractWorkflowCallInputs(yamlText) {
-  const lines = yamlText.split("\n");
+function extractWorkflowCallInputsStrict(yamlText) {
+  const lines = yamlText.split("\n").map((l) => l.replace(/\t/g, "  ")); // normalize tabs -> spaces
 
-  // Track indentation-based state
-  let inOn = false;
-  let onIndent = null;
-
-  let inWorkflowCall = false;
-  let workflowCallIndent = null;
-
-  let inInputs = false;
-  let inputsIndent = null;
-
-  const inputs = [];
+  // ---- 1) Find `on:` --------------------------------------------------------
+  let onLineIndex = -1;
+  let onIndent = -1;
 
   for (let i = 0; i < lines.length; i++) {
-    const raw = lines[i];
-    const line = raw.replace(/\t/g, "  "); // normalize tabs -> spaces
-    const trimmed = line.trim();
+    const trimmed = lines[i].trim();
+    if (trimmed === "on:") {
+      onLineIndex = i;
+      onIndent = lines[i].length - lines[i].trimStart().length;
+      break;
+    }
+  }
 
+  if (onLineIndex === -1) {
+    return { ok: false, inputs: [], error: "`on:` not found" };
+  }
+
+  // ---- 2) Find `workflow_call:` inside the `on:` block ----------------------
+  let workflowCallLineIndex = -1;
+  let workflowCallIndent = -1;
+
+  for (let i = onLineIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
     if (trimmed === "" || trimmed.startsWith("#")) continue;
 
     const indent = line.length - line.trimStart().length;
 
-    // Enter "on:" block
-    if (!inOn && trimmed === "on:") {
-      inOn = true;
-      onIndent = indent;
-      continue;
-    }
+    // left the `on:` block
+    if (indent <= onIndent) break;
 
-    // If we were in "on:" but indentation returns to <= onIndent, we've left "on:"
-    if (inOn && indent <= onIndent && trimmed !== "on:") {
-      inOn = false;
-      inWorkflowCall = false;
-      inInputs = false;
-    }
-
-    // Enter "workflow_call:" under "on:"
-    if (inOn && !inWorkflowCall && trimmed === "workflow_call:") {
-      inWorkflowCall = true;
+    if (trimmed === "workflow_call:") {
+      workflowCallLineIndex = i;
       workflowCallIndent = indent;
-      continue;
-    }
-
-    // If we were in workflow_call but indentation returns to <= workflowCallIndent, we left it
-    if (inWorkflowCall && indent <= workflowCallIndent && trimmed !== "workflow_call:") {
-      inWorkflowCall = false;
-      inInputs = false;
-    }
-
-    // Enter "inputs:" under workflow_call
-    if (inWorkflowCall && !inInputs && trimmed === "inputs:") {
-      inInputs = true;
-      inputsIndent = indent;
-      continue;
-    }
-
-    // If we are inside inputs, collect keys at the next indentation level.
-    // Example:
-    //   inputs:          (inputsIndent = 6)
-    //     working_directory:   <-- key indent is inputsIndent + 2 (or more)
-    if (inInputs) {
-      // If indentation returns to <= inputsIndent, we've left inputs block.
-      if (indent <= inputsIndent && trimmed !== "inputs:") {
-        inInputs = false;
-        continue;
-      }
-
-      // Match a YAML key definition: "<key>:"
-      // Only accept keys that appear at indentation > inputsIndent (children),
-      // and avoid capturing nested props like "type:" because those are deeper indented.
-      const keyMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*$/);
-      if (keyMatch) {
-        const keyIndent = indent;
-
-        // Only accept keys that are direct children of inputs:
-        // We accept the FIRST level under inputs. Nested keys will have larger indent.
-        // We infer direct child level by taking the first key indent encountered.
-        if (inputs.length === 0) {
-          // First key sets the "direct child indent"
-          // (common pattern is inputsIndent + 2, but we don't hardcode)
-          inputs.push(keyMatch[1]);
-          continue;
-        }
-
-        // Determine directChildIndent as indent of the first input key.
-        const directChildIndent = (() => {
-          // Find indent of first captured key by searching backwards for it in lines.
-          // Simpler: we can store it once.
-          return null;
-        })();
-      }
+      break;
     }
   }
 
-  // The above loop captured keys but didn't safely distinguish nested keys.
-  // We'll do a second pass with a stricter extraction that sets directChildIndent.
+  if (workflowCallLineIndex === -1) {
+    return { ok: false, inputs: [], error: "`workflow_call:` not found under `on:`" };
+  }
 
-  return extractWorkflowCallInputsStrict(yamlText);
-}
-
-/**
- * Strict version:
- *  - Identify workflow_call.inputs section
- *  - Determine the indentation of direct children under inputs
- *  - Only capture keys at that indentation level
- */
-function extractWorkflowCallInputsStrict(yamlText) {
-  const lines = yamlText.split("\n").map(l => l.replace(/\t/g, "  "));
-
-  // Find the "inputs:" line that belongs to workflow_call
+  // ---- 3) Find `inputs:` inside the `workflow_call:` block ------------------
   let inputsLineIndex = -1;
   let inputsIndent = -1;
 
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = workflowCallLineIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+    if (trimmed === "" || trimmed.startsWith("#")) continue;
+
+    const indent = line.length - line.trimStart().length;
+
+    // left `workflow_call:` block
+    if (indent <= workflowCallIndent) break;
+
     if (trimmed === "inputs:") {
-      // Quick heuristic: ensure we saw workflow_call above it before leaving that block
-      // We'll scan upward a bit for "workflow_call:"
-      let seenWorkflowCall = false;
-      for (let j = i - 1; j >= 0 && j >= i - 25; j--) {
-        const t = lines[j].trim();
-        if (t === "workflow_call:") { seenWorkflowCall = true; break; }
-        if (t === "on:") break;
-      }
-      if (seenWorkflowCall) {
-        inputsLineIndex = i;
-        inputsIndent = line.length - line.trimStart().length;
-        break;
-      }
+      inputsLineIndex = i;
+      inputsIndent = indent;
+      break;
     }
   }
 
   if (inputsLineIndex === -1) {
-    return { ok: false, inputs: [], error: "workflow_call.inputs not found" };
+    return { ok: false, inputs: [], error: "`workflow_call.inputs` not found" };
   }
 
-  // Determine indentation of direct children (first key after inputs:)
+  // ---- 4) Determine indent of direct children under inputs ------------------
   let directChildIndent = null;
+
   for (let i = inputsLineIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
@@ -218,10 +150,11 @@ function extractWorkflowCallInputsStrict(yamlText) {
 
     const indent = line.length - line.trimStart().length;
 
-    // If indentation goes back to <= inputsIndent, inputs block ended
+    // left `inputs:` block
     if (indent <= inputsIndent) break;
 
-    const keyMatch = trimmed.match(/^([A-Za-z0-9_-]+):\s*(#.*)?$/);
+    // first key under inputs establishes the direct-child indentation
+    const keyMatch = trimmed.match(/^([A-Za-z0-9_-]+):/);
     if (keyMatch) {
       directChildIndent = indent;
       break;
@@ -232,8 +165,9 @@ function extractWorkflowCallInputsStrict(yamlText) {
     return { ok: false, inputs: [], error: "inputs block found but contains no keys" };
   }
 
-  // Collect only keys at directChildIndent
+  // ---- 5) Collect only keys at directChildIndent ----------------------------
   const inputs = [];
+
   for (let i = inputsLineIndex + 1; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
@@ -241,8 +175,10 @@ function extractWorkflowCallInputsStrict(yamlText) {
 
     const indent = line.length - line.trimStart().length;
 
-    if (indent <= inputsIndent) break; // left inputs section
+    // left `inputs:` block
+    if (indent <= inputsIndent) break;
 
+    // only accept direct children (prevents capturing nested `type:` etc.)
     if (indent === directChildIndent) {
       const keyMatch = trimmed.match(/^([A-Za-z0-9_-]+):/);
       if (keyMatch) inputs.push(keyMatch[1]);
@@ -308,7 +244,7 @@ function main() {
     if (extras.length > 0) {
       console.error(
         `❌ ${wf} has unapproved extra inputs: ${extras.join(", ")} ` +
-        `(allowed extras: ${allowedExtras.join(", ") || "none"})`
+          `(allowed extras: ${allowedExtras.join(", ") || "none"})`
       );
       failed = true;
     }
