@@ -18,8 +18,5 @@ jobs:
       # PIPE-CORE-1.1 Governance Gates
       # ----------------------------------------------------------------------
 
-    #   - name: Validate runtime matrix (schema + policy)
-    #     run: node scripts/validate-runtime-matrix.mjs
-
-      - name: Enforce build-workflow v1 input contract
-        run: node scripts/check-workflow-inputs.mjs
+      - name: BrikByteOS Build Contract Regression (v1)
+        run: node scripts/governance/run-contract-regression.mjs
