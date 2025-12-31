@@ -102,6 +102,23 @@ jobs:
       # -----------------------------------------------------------------------
       - uses: actions/checkout@v4
 
+      - name: Validate build config (.brik/build.yml)
+        id: validate
+        continue-on-error: true
+        uses: BrikByte-Studios/brik-pipe-actions/.github/actions/validate-build-config@main
+        with:
+          config_path: "${{ inputs.working_directory }}/.brik/build.yml"
+          strict: "false"
+
+      - name: Stop if build config invalid (after evidence)
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.validate.outcome }}" != "success" ]; then
+            echo "❌ Build config validation failed. See .audit/PIPE-BUILD/validation/validation-summary.md"
+            exit 1
+          fi
+
       # -----------------------------------------------------------------------
       # 2) Resolve runtime defaults using the canonical runtime matrix
       #    - Reads vendored runtime-matrix.yml within this repo
@@ -168,7 +185,7 @@ jobs:
           set -euo pipefail
           CMD="${{ inputs.test_command }}"
           # If no override is provided, use canonical v1 default.
-          if [ -z "$CMD" ]; then CMD="make test"; fi
+          if [ -z "$CMD" ]; then CMD="go test ./... -count=1"; fi
           bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
 
       # -----------------------------------------------------------------------
