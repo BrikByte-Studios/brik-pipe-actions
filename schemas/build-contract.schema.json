@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brikbyte.studio/schemas/build-contract.schema.json",
+  "title": "BrikByteOS Build Contract (v1) — Allowed Overrides",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "working_directory": { "type": "string" },
+    "runtime_version": { "type": "string" },
+
+    "package_manager": { "type": "string" },
+    "build_tool": { "type": "string" },
+
+    "run_lint": { "type": "boolean" },
+    "run_tests": { "type": "boolean" },
+    "upload_artifacts": { "type": "boolean" },
+
+    "lint_command": { "type": "string" },
+    "test_command": { "type": "string" },
+    "build_command": { "type": "string" },
+
+    "artifact_paths": { "type": "string" }
+  }
+}

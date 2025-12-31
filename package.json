@@ -2,7 +2,8 @@
   "name": "brik-pipe-actions",
   "private": true,
   "scripts": {
-    "build:resolve-runtime": "node scripts/build-resolve-runtime.mjs"
+    "build:resolve-runtime": "node scripts/build-resolve-runtime.mjs",
+    "adr:create": "node scripts/adr/adr-create.js"
   },
   "devDependencies": {
     "@actions/core": "^1.11.1",
