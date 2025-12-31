@@ -30,32 +30,71 @@ function read(p) {
   return fs.readFileSync(p, "utf8").replace(/\t/g, "  ");
 }
 
-function extractStepIds(yaml) {
-  const lines = yaml.split("\n");
+/**
+ * Extract step blocks under `steps:` with their raw lines + discovered id.
+ * Zero YAML deps. Indentation-based.
+ */
+function extractStepBlocks(yamlText) {
+  const lines = yamlText.split("\n").map((l) => l.replace(/\t/g, "  "));
   let inSteps = false;
-  let indent = -1;
-  const ids = [];
+  let stepsIndent = -1;
 
-  for (const line of lines) {
+  const blocks = [];
+  let current = null;
+
+  // Helper to get indentation
+  const indentOf = (line) => line.length - line.trimStart().length;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
     const t = line.trim();
 
-    if (t === "steps:") {
+    // Enter steps:
+    if (!inSteps && t === "steps:") {
       inSteps = true;
-      indent = line.length - line.trimStart().length;
+      stepsIndent = indentOf(line);
       continue;
-    }
-
-    if (inSteps && (line.length - line.trimStart().length) <= indent && t !== "steps:") {
-      inSteps = false;
     }
 
     if (!inSteps) continue;
 
-    const m = t.match(/^id:\s*([A-Za-z0-9_-]+)\s*$/);
-    if (m) ids.push(m[1]);
+    // Leave steps: when indentation returns to <= stepsIndent (and not the steps: line itself)
+    if (indentOf(line) <= stepsIndent && t !== "steps:") {
+      // flush last block
+      if (current) blocks.push(current);
+      inSteps = false;
+      current = null;
+      continue;
+    }
+
+    // A step starts with "- " at indentation > stepsIndent
+    const isStepStart =
+      t.startsWith("- ") && indentOf(line) > stepsIndent;
+
+    if (isStepStart) {
+      if (current) blocks.push(current);
+      current = { lines: [line], id: null };
+      continue;
+    }
+
+    // Accumulate lines into current step block
+    if (current) {
+      current.lines.push(line);
+
+      // Capture id: <value> (allow spaces)
+      const m = t.match(/^id:\s*([A-Za-z0-9_-]+)\s*$/);
+      if (m) current.id = m[1];
+    }
   }
 
-  return ids;
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+function extractStepIds(yamlText) {
+  return extractStepBlocks(yamlText)
+    .map((b) => b.id)
+    .filter(Boolean);
 }
 
 function findIndex(ids, role) {
@@ -66,67 +105,46 @@ function findIndex(ids, role) {
 }
 
 /**
- * Evidence/verdict MUST be guarded by always().
- *
- * Accept:
- *  - if: always()
- *  - if: ${{ always() }}
- *  - if: ${{ inputs.upload_artifacts && always() }}
- *  - if: ${{ always() && something }}
- *
- * Also handle if: appearing ABOVE or BELOW the id: line.
+ * Checks if the step with id=<stepId> has an if: that includes always().
+ * Accepts:
+ *   if: always()
+ *   if: ${{ always() }}
+ *   if: ${{ something && always() }}
  */
-function assertAlways(yaml, stepId) {
-  const lines = yaml.split("\n").map((l) => l.replace(/\t/g, "  "));
+function stepHasAlwaysGuard(yamlText, stepId) {
+  const blocks = extractStepBlocks(yamlText);
+  const block = blocks.find((b) => b.id === stepId);
+  if (!block) return false;
 
-  // Find the line where `id: <stepId>` appears
-  let idLine = -1;
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === `id: ${stepId}`) {
-      idLine = i;
-      break;
-    }
-  }
-  if (idLine === -1) return false;
-
-  const isAlwaysIf = (trimmedLine) =>
-    trimmedLine.startsWith("if:") && trimmedLine.includes("always()");
-
-  // Scan a window around id: to catch `if:` above or below.
-  // Keep small to avoid false positives from other steps.
-  const start = Math.max(0, idLine - 12);
-  const end = Math.min(lines.length - 1, idLine + 18);
-
-  for (let i = start; i <= end; i++) {
-    const t = lines[i].trim();
-    if (isAlwaysIf(t)) return true;
-  }
-
-  return false;
+  return block.lines.some((l) => {
+    const t = l.trim();
+    return t.startsWith("if:") && t.includes("always()");
+  });
 }
 
 let failed = false;
 
-for (const wf of fs.readdirSync(WORKFLOW_DIR).filter((f) => f.startsWith("build-") && (f.endsWith(".yml") || f.endsWith(".yaml")))) {
-  const yaml = read(path.join(WORKFLOW_DIR, wf));
-  const ids = extractStepIds(yaml);
+for (const wf of fs
+  .readdirSync(WORKFLOW_DIR)
+  .filter((f) => f.startsWith("build-") && (f.endsWith(".yml") || f.endsWith(".yaml")))) {
+  const yamlText = read(path.join(WORKFLOW_DIR, wf));
+  const ids = extractStepIds(yamlText);
 
-  // Track per-workflow failures (so ✅ prints correctly per file)
   let wfFailed = false;
 
-  // Evidence must exist and be always()
-  if (findIndex(ids, "evidence") === -1 || !assertAlways(yaml, "evidence")) {
+  // Evidence step must exist and be always()
+  if (findIndex(ids, "evidence") === -1 || !stepHasAlwaysGuard(yamlText, "evidence")) {
     console.error(`❌ ${wf}: missing or non-always() evidence step`);
     wfFailed = true;
   }
 
-  // Verdict must exist and be always()
-  if (findIndex(ids, "verdict") === -1 || !assertAlways(yaml, "verdict")) {
+  // Verdict step must exist and be always()
+  if (findIndex(ids, "verdict") === -1 || !stepHasAlwaysGuard(yamlText, "verdict")) {
     console.error(`❌ ${wf}: missing or non-always() verdict step`);
     wfFailed = true;
   }
 
-  // Stage order check (only relative order of stages that exist)
+  // Stage order (relative order of stages that exist)
   let last = -1;
   for (const stage of EXPECTED_ORDER) {
     const i = findIndex(ids, stage);
@@ -138,12 +156,10 @@ for (const wf of fs.readdirSync(WORKFLOW_DIR).filter((f) => f.startsWith("build-
     if (i !== -1) last = i;
   }
 
-  if (!wfFailed) {
-    console.log(`✅ ${wf}: stage order OK`);
-  } else {
-    failed = true;
-  }
+  if (!wfFailed) console.log(`✅ ${wf}: stage order OK`);
+  else failed = true;
 }
 
 if (failed) process.exit(1);
 console.log("✅ All workflows comply with v1 stage order contract");
+
