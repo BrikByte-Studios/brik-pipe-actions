@@ -113,7 +113,7 @@ jobs:
         continue-on-error: true
         uses: BrikByte-Studios/brik-pipe-actions/.github/actions/validate-build-config@main
         with:
-          config_path: ".brik/build.yml"
+          config_path: "${{ inputs.working_directory }}/.brik/build.yml"
           strict: "false"
 
       - name: Stop if build config invalid (after evidence)
