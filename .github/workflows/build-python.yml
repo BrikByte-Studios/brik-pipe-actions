@@ -197,7 +197,7 @@ jobs:
       # -----------------------------------------------------------------------
       # 6) Test step (default on)
       #    - Default command:
-      #        make test
+      #        python -m pytest -q
       # -----------------------------------------------------------------------
       - name: Test (default on)
         id: test
@@ -207,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           CMD="${{ inputs.test_command }}"
-          if [ -z "$CMD" ]; then CMD="make test"; fi
+          if [ -z "$CMD" ]; then CMD="python -m pytest -q"; fi
           echo "Test: $CMD"
           bash -lc "$CMD" 2>&1 | tee "$RUNNER_TEMP/test.log"
 

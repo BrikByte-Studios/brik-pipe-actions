@@ -36107,7 +36107,7 @@ function defaultsByStack(stack, toolKind) {
             return {
                 install: toolKind === "poetry" ? "poetry install --no-interaction --no-ansi" : "python -m pip install -r requirements.txt",
                 lint: "python -m ruff check .",
-                test: "make test",
+                test: "python -m pytest -q",
                 build: "python -m compileall .",
                 artifacts: ["__pycache__/**"],
             };
