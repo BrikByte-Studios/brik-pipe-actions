@@ -36059,10 +36059,15 @@ function resolveActionRepoRoot() {
  * Loads runtime matrix from brik-pipe-actions repo.
  */
 function loadRuntimeMatrix(repoRoot) {
-    const p = path_1.default.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml");
-    if (!fs_1.default.existsSync(p))
-        throw new Error(`runtime-matrix.yml not found at: ${p}`);
-    return { path: p, data: js_yaml_1.default.load(readFile(p)) };
+    const candidates = [
+        path_1.default.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml"),
+        path_1.default.join(repoRoot, "internal", "vendor", "runtime-matrix.yml"),
+    ];
+    for (const p of candidates) {
+        if (fs_1.default.existsSync(p))
+            return { path: p, data: js_yaml_1.default.load(readFile(p)) };
+    }
+    throw new Error(`runtime-matrix.yml not found. Tried:\n- ${candidates.join("\n- ")}`);
 }
 /**
  * Loads JSON schema from brik-pipe-actions repo.

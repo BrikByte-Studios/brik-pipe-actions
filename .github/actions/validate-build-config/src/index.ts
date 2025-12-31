@@ -107,9 +107,16 @@ function resolveActionRepoRoot(): string {
  * Loads runtime matrix from brik-pipe-actions repo.
  */
 function loadRuntimeMatrix(repoRoot: string): any {
-  const p = path.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml");
-  if (!fs.existsSync(p)) throw new Error(`runtime-matrix.yml not found at: ${p}`);
-  return { path: p, data: yaml.load(readFile(p)) as any };
+  const candidates = [
+    path.join(repoRoot, "docs", "pipelines", "runtime-matrix.yml"),
+    path.join(repoRoot, "internal", "vendor", "runtime-matrix.yml"),
+  ];
+
+  for (const p of candidates) {
+    if (fs.existsSync(p))return { path: p, data: yaml.load(readFile(p)) as any };
+  }
+
+  throw new Error(`runtime-matrix.yml not found. Tried:\n- ${candidates.join("\n- ")}`);
 }
 
 /**
