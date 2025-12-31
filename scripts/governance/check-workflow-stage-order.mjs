@@ -38,17 +38,23 @@ function extractStepIds(yaml) {
 
   for (const line of lines) {
     const t = line.trim();
+
     if (t === "steps:") {
       inSteps = true;
       indent = line.length - line.trimStart().length;
       continue;
     }
-    if (inSteps && (line.length - line.trimStart().length) <= indent && t !== "steps:") inSteps = false;
+
+    if (inSteps && (line.length - line.trimStart().length) <= indent && t !== "steps:") {
+      inSteps = false;
+    }
+
     if (!inSteps) continue;
 
-    const m = t.match(/^id:\s*([A-Za-z0-9_-]+)$/);
+    const m = t.match(/^id:\s*([A-Za-z0-9_-]+)\s*$/);
     if (m) ids.push(m[1]);
   }
+
   return ids;
 }
 
@@ -59,10 +65,21 @@ function findIndex(ids, role) {
   return -1;
 }
 
-function assertAlways(yamlText, stepId) {
-  const lines = yamlText.split("\n");
+/**
+ * Evidence/verdict MUST be guarded by always().
+ *
+ * Accept:
+ *  - if: always()
+ *  - if: ${{ always() }}
+ *  - if: ${{ inputs.upload_artifacts && always() }}
+ *  - if: ${{ always() && something }}
+ *
+ * Also handle if: appearing ABOVE or BELOW the id: line.
+ */
+function assertAlways(yaml, stepId) {
+  const lines = yaml.split("\n").map((l) => l.replace(/\t/g, "  "));
 
-  // Find the line index where the step id is declared
+  // Find the line where `id: <stepId>` appears
   let idLine = -1;
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim() === `id: ${stepId}`) {
@@ -72,56 +89,60 @@ function assertAlways(yamlText, stepId) {
   }
   if (idLine === -1) return false;
 
-  // Accept: if: always()
-  // Accept: if: ${{ always() }}
-  // Accept: if: ${{ something && always() }}
-  // Accept: if: ${{ always() && something }}
-  const isAlwaysExpr = (trimmedLine) => {
-    if (!trimmedLine.startsWith("if:")) return false;
-    return trimmedLine.includes("always()");
-  };
+  const isAlwaysIf = (trimmedLine) =>
+    trimmedLine.startsWith("if:") && trimmedLine.includes("always()");
 
-  // Scan a small window around the id line (handles if: above or below)
+  // Scan a window around id: to catch `if:` above or below.
+  // Keep small to avoid false positives from other steps.
   const start = Math.max(0, idLine - 12);
   const end = Math.min(lines.length - 1, idLine + 18);
 
   for (let i = start; i <= end; i++) {
     const t = lines[i].trim();
-    if (isAlwaysExpr(t)) return true;
+    if (isAlwaysIf(t)) return true;
   }
 
   return false;
 }
 
-
 let failed = false;
 
-for (const wf of fs.readdirSync(WORKFLOW_DIR).filter(f => f.startsWith("build-"))) {
+for (const wf of fs.readdirSync(WORKFLOW_DIR).filter((f) => f.startsWith("build-") && (f.endsWith(".yml") || f.endsWith(".yaml")))) {
   const yaml = read(path.join(WORKFLOW_DIR, wf));
   const ids = extractStepIds(yaml);
 
+  // Track per-workflow failures (so ✅ prints correctly per file)
+  let wfFailed = false;
+
+  // Evidence must exist and be always()
   if (findIndex(ids, "evidence") === -1 || !assertAlways(yaml, "evidence")) {
     console.error(`❌ ${wf}: missing or non-always() evidence step`);
-    failed = true;
+    wfFailed = true;
   }
 
+  // Verdict must exist and be always()
   if (findIndex(ids, "verdict") === -1 || !assertAlways(yaml, "verdict")) {
     console.error(`❌ ${wf}: missing or non-always() verdict step`);
-    failed = true;
+    wfFailed = true;
   }
 
+  // Stage order check (only relative order of stages that exist)
   let last = -1;
   for (const stage of EXPECTED_ORDER) {
     const i = findIndex(ids, stage);
     if (i !== -1 && i < last) {
       console.error(`❌ ${wf}: stage order violation (${ids.join(" → ")})`);
-      failed = true;
+      wfFailed = true;
       break;
     }
     if (i !== -1) last = i;
   }
 
-  if (!failed) console.log(`✅ ${wf}: stage order OK`);
+  if (!wfFailed) {
+    console.log(`✅ ${wf}: stage order OK`);
+  } else {
+    failed = true;
+  }
 }
 
 if (failed) process.exit(1);
