@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brikbyte.studios/schemas/build.schema.json",
+  "title": "BrikByteOS Build Config (.brik/build.yml)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "stack"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Schema contract version. Must be 1 for v1."
+    },
+    "stack": {
+      "type": "string",
+      "enum": ["node", "python", "java", "dotnet", "go"],
+      "description": "Build stack identifier."
+    },
+    "workingDirectory": {
+      "type": "string",
+      "default": ".",
+      "description": "Directory (relative to repo root) where commands execute."
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional runtime version override. If omitted, defaults from runtime matrix."
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Toolchain choice (package manager/build tool). Validated against stack."
+        }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "install": { "type": "string", "default": "" },
+        "lint": { "type": "string", "default": "" },
+        "test": { "type": "string", "default": "" },
+        "build": { "type": "string", "default": "" }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runLint": { "type": "boolean", "default": false },
+        "runTests": { "type": "boolean", "default": true }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "default": [],
+          "description": "Artifact glob paths for audit summary. Defaults are stack-specific."
+        }
+      }
+    }
+  }
+}

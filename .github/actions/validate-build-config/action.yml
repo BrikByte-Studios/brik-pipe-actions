@@ -1,5 +1,25 @@
-name: "Validate Brik build config"
-description: "Validates .brik/build.yml against the BrikByte runtime matrix"
+name: "Validate Build Config (.brik/build.yml)"
+description: "Fail-fast validator for BrikByte build config. Emits .audit validation evidence."
+inputs:
+  config_path:
+    description: "Path to build config file"
+    required: false
+    default: ".brik/build.yml"
+  strict:
+    description: "If true, treat warnings as failures"
+    required: false
+    default: "false"
+  allow_unsafe_commands:
+    description: "If true, allow risky patterns (discouraged; v2 governance may remove)"
+    required: false
+    default: "false"
+outputs:
+  validation_ok:
+    description: "true|false"
+  resolved_config_path:
+    description: "Path to resolved config JSON"
+  validation_report_path:
+    description: "Path to validation report JSON"
 runs:
   using: "node20"
-  main: "dist/validate-build-config.mjs"
+  main: "dist/index.js"
