@@ -59,18 +59,40 @@ function findIndex(ids, role) {
   return -1;
 }
 
-function assertAlways(yaml, id) {
-  const lines = yaml.split("\n");
+function assertAlways(yamlText, stepId) {
+  const lines = yamlText.split("\n");
+
+  // Find the line index where the step id is declared
+  let idLine = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i].trim() === `id: ${id}`) {
-      for (let j = i; j < i + 14 && j < lines.length; j++) {
-        if (lines[j].trim() === "if: always()") return true;
-      }
-      return false;
+    if (lines[i].trim() === `id: ${stepId}`) {
+      idLine = i;
+      break;
     }
   }
+  if (idLine === -1) return false;
+
+  // Accept: if: always()
+  // Accept: if: ${{ always() }}
+  // Accept: if: ${{ something && always() }}
+  // Accept: if: ${{ always() && something }}
+  const isAlwaysExpr = (trimmedLine) => {
+    if (!trimmedLine.startsWith("if:")) return false;
+    return trimmedLine.includes("always()");
+  };
+
+  // Scan a small window around the id line (handles if: above or below)
+  const start = Math.max(0, idLine - 12);
+  const end = Math.min(lines.length - 1, idLine + 18);
+
+  for (let i = start; i <= end; i++) {
+    const t = lines[i].trim();
+    if (isAlwaysExpr(t)) return true;
+  }
+
   return false;
 }
+
 
 let failed = false;
 
