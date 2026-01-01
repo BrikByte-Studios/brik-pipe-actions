@@ -28,7 +28,7 @@
         "version": {
           "type": "string",
           "minLength": 1,
-          "description": "Optional runtime version override. If omitted, defaults from runtime matrix."
+          "description": "Optional runtime version override. If present, must be non-empty. If omitted, matrix default is used."
         }
       }
     },
@@ -39,18 +39,19 @@
         "kind": {
           "type": "string",
           "minLength": 1,
-          "description": "Toolchain choice (package manager/build tool). Validated against stack."
+          "description": "Optional tool override. If present, must be non-empty. If omitted, matrix default is used."
         }
       }
     },
     "commands": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["install", "build"],
       "properties": {
-        "install": { "type": "string", "default": "" },
+        "install": { "type": "string", "minLength": 1 },
         "lint": { "type": "string", "default": "" },
         "test": { "type": "string", "default": "" },
-        "build": { "type": "string", "default": "" }
+        "build": { "type": "string", "minLength": 1 }
       }
     },
     "flags": {
