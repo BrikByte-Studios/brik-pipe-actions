@@ -40,16 +40,33 @@ jobs:
           EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
           EVIDENCE_ROOT: .audit/PIPE-BUILD/nightly/${{ matrix.stack }}
 
-      - name: Validate evidence schema
-        if: always()
-        run: node scripts/regression/validate-evidence.mjs
+      # 3) Evidence verification on success.
+      - name: Assert evidence exists (PASS)
+        run: bash scripts/regression/assert-evidence.sh
         env:
-          EVIDENCE_ROOT: .audit/PIPE-BUILD/nightly/${{ matrix.stack }}
-          EVIDENCE_SCHEMA: scripts/regression/schemas/evidence.schema.json
+          EVIDENCE_ROOT: .audit/PIPE-BUILD/smoke/${{ matrix.stack }}
+          EXPECT_VALIDATION: "true"
+          EXPECT_SUCCESS: "true"
+
+      # 4) Force a validation FAIL and ensure failure evidence exists.
+      - name: Generate failing validation evidence (FAIL path)
+        run: node scripts/regression/fail-validation.mjs
+        env:
+          STACK: ${{ matrix.stack }}
+          EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
+          ACTION_PATH: .github/actions/validate-build-config
+
+      - name: Assert evidence exists (FAIL)
+        if: always()
+        run: bash scripts/regression/assert-evidence.sh
+        env:
+          EVIDENCE_ROOT: .audit/PIPE-BUILD/validation-fail/${{ matrix.stack }}
+          EXPECT_VALIDATION: "true"
+          EXPECT_SUCCESS: "false"
 
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-pipe-build-evidence-${{ matrix.stack }}
+          name: pipe-build-evidence-${{ matrix.stack }}
           path: .audit/PIPE-BUILD

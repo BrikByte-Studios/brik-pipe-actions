@@ -113,9 +113,9 @@ jobs:
           ACTION_PATH: .github/actions/validate-build-config
           EXAMPLE_CONFIG: scripts/regression/fixtures/valid/node.build.yml
 
-  full-smoke:
-    name: Full C+D) Smoke builds + evidence checks (only when needed)
-    needs: [changes, fast-static]
+  smoke-builds-and-evidence:
+    name: C+D) Smoke Builds (examples) + Evidence Verification
+    needs: [changes, fast-static, schema-and-validator-tests]
     if: ${{ needs.changes.outputs.smoke == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -123,14 +123,18 @@ jobs:
       fail-fast: false
       matrix:
         stack: [node, python, java, dotnet, go]
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout brik-pipe-actions
+        uses: actions/checkout@v4
+
+      - name: Setup Node (for validator + regression scripts)
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - run: npm ci
+      - name: Install brik-pipe-actions deps
+        run: npm ci
 
       - name: Checkout brik-pipe-examples
         uses: actions/checkout@v4
@@ -138,6 +142,7 @@ jobs:
           repository: BrikByte-Studios/brik-pipe-examples
           path: examples
 
+      # 1) Validate config (PASS path for each example)
       - name: Validate build.yml (example)
         uses: ./.github/actions/validate-build-config
         with:
@@ -145,35 +150,39 @@ jobs:
           strict: false
           allow_unsafe_commands: false
 
-      - name: Smoke runner
+      # 2) Execute smoke pipeline using resolved config (install/lint/test/build).
+      - name: Smoke build (contract runner)
         run: node scripts/regression/smoke-runner.mjs
         env:
           STACK: ${{ matrix.stack }}
           EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
           EVIDENCE_ROOT: .audit/PIPE-BUILD/smoke/${{ matrix.stack }}
 
-      - name: Validate evidence against JSON Schema (PASS)
-        if: always()
-        run: node scripts/regression/validate-evidence.mjs
+      # 3) Evidence verification on success.
+      - name: Assert evidence exists (PASS)
+        run: bash scripts/regression/assert-evidence.sh
         env:
           EVIDENCE_ROOT: .audit/PIPE-BUILD/smoke/${{ matrix.stack }}
-          EVIDENCE_SCHEMA: scripts/regression/schemas/evidence.schema.json
+          EXPECT_VALIDATION: "true"
+          EXPECT_SUCCESS: "true"
 
-      - name: Force validation fail + evidence
+      # 4) Force a validation FAIL and ensure failure evidence exists.
+      - name: Generate failing validation evidence (FAIL path)
         run: node scripts/regression/fail-validation.mjs
         env:
           STACK: ${{ matrix.stack }}
           EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
           ACTION_PATH: .github/actions/validate-build-config
 
-      - name: Validate evidence against JSON Schema (FAIL)
+      - name: Assert evidence exists (FAIL)
         if: always()
-        run: node scripts/regression/validate-evidence.mjs
+        run: bash scripts/regression/assert-evidence.sh
         env:
           EVIDENCE_ROOT: .audit/PIPE-BUILD/validation-fail/${{ matrix.stack }}
-          EVIDENCE_SCHEMA: scripts/regression/schemas/evidence.schema.json
+          EXPECT_VALIDATION: "true"
+          EXPECT_SUCCESS: "false"
 
-      - name: Upload evidence bundle
+      - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
