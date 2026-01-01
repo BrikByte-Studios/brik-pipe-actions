@@ -1,0 +1,55 @@
+name: Nightly - Full Smoke Builds (templates + examples)
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC daily
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [node, python, java, dotnet, go]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+
+      - uses: actions/checkout@v4
+        with:
+          repository: BrikByte-Studios/brik-pipe-examples
+          path: examples
+
+      - name: Validate build.yml
+        uses: ./.github/actions/validate-build-config
+        with:
+          config_path: examples/${{ matrix.stack }}-api-example/.brik/build.yml
+          strict: false
+          allow_unsafe_commands: false
+
+      - name: Smoke runner
+        run: node scripts/regression/smoke-runner.mjs
+        env:
+          STACK: ${{ matrix.stack }}
+          EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
+          EVIDENCE_ROOT: .audit/PIPE-BUILD/nightly/${{ matrix.stack }}
+
+      - name: Validate evidence schema
+        if: always()
+        run: node scripts/regression/validate-evidence.mjs
+        env:
+          EVIDENCE_ROOT: .audit/PIPE-BUILD/nightly/${{ matrix.stack }}
+          EVIDENCE_SCHEMA: scripts/regression/schemas/evidence.schema.json
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-pipe-build-evidence-${{ matrix.stack }}
+          path: .audit/PIPE-BUILD

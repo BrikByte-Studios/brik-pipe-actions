@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PIPE-BUILD metadata.json",
+  "type": "object",
+  "required": ["repo", "sha", "run_id", "workflow", "stack", "timestamp"],
+  "properties": {
+    "repo": { "type": "string", "minLength": 1 },
+    "sha": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "workflow": { "type": "string", "minLength": 1 },
+    "stack": { "type": "string", "enum": ["node", "python", "java", "dotnet", "go"] },
+    "runtime_used": { "type": ["string", "null"] },
+    "tool_used": { "type": ["string", "null"] },
+    "timestamp": { "type": "string", "minLength": 10 }
+  },
+  "additionalProperties": true
+}
