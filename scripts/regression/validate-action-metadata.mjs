@@ -1,23 +1,19 @@
 /**
- * Validate composite action metadata files for basic sanity.
+ * Validate action metadata files for basic sanity.
  *
  * What this catches:
  * - missing action.yml
- * - missing required keys: name, runs.using, runs.steps
- * - wrong 'using' field (must be "composite" for composite actions)
+ * - missing required keys: name, runs.using
+ * - unsupported runs.using values
+ * - composite actions missing runs.steps
  *
- * This is intentionally lightweight to keep checks fast (<1 min).
+ * Lightweight by design (<1 min).
  */
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
 
 const actionsDir = process.env.ACTIONS_DIR || ".github/actions";
-
-function fail(msg) {
-  console.error(`❌ validate-action-metadata: ${msg}`);
-  process.exit(1);
-}
 
 function walkDirs(dir) {
   const out = [];
@@ -28,29 +24,60 @@ function walkDirs(dir) {
   return out;
 }
 
-if (!fs.existsSync(actionsDir)) fail(`ACTIONS_DIR not found: ${actionsDir}`);
+function safeParseYaml(raw, filePath) {
+  try {
+    return YAML.parse(raw);
+  } catch (e) {
+    return { __parseError: `YAML parse error: ${e?.message || String(e)}`, __filePath: filePath };
+  }
+}
+
+const errors = [];
+const okUsing = new Set(["composite", "node20", "node18", "node16"]);
+
+console.log(`🔎 validate-action-metadata: scanning "${actionsDir}"`);
+
+if (!fs.existsSync(actionsDir)) {
+  console.error(`❌ validate-action-metadata: ACTIONS_DIR not found: ${actionsDir}`);
+  process.exit(1);
+}
 
 const actionDirs = walkDirs(actionsDir).filter((d) => fs.existsSync(path.join(d, "action.yml")));
-if (actionDirs.length === 0) fail(`No action.yml files found under ${actionsDir}`);
+if (actionDirs.length === 0) {
+  console.error(`❌ validate-action-metadata: No action.yml files found under ${actionsDir}`);
+  process.exit(1);
+}
 
 for (const dir of actionDirs) {
   const ymlPath = path.join(dir, "action.yml");
   const raw = fs.readFileSync(ymlPath, "utf8");
-  const obj = YAML.parse(raw);
+  const obj = safeParseYaml(raw, ymlPath);
 
-  if (!obj?.name) fail(`Missing "name" in ${ymlPath}`);
-  if (!obj?.runs?.using) fail(`Missing "runs.using" in ${ymlPath}`);
+  if (obj?.__parseError) {
+    errors.push({ path: ymlPath, reason: obj.__parseError });
+    continue;
+  }
 
-  // Most BrikByte actions here are composite or node20. Accept either.
-  const using = String(obj.runs.using);
-  const okUsing = new Set(["composite", "node20", "node16", "node18"]);
-  if (!okUsing.has(using)) fail(`Unexpected runs.using="${using}" in ${ymlPath}`);
+  if (!obj?.name) errors.push({ path: ymlPath, reason: `Missing "name"` });
+  if (!obj?.runs?.using) errors.push({ path: ymlPath, reason: `Missing "runs.using"` });
+
+  const using = String(obj?.runs?.using || "");
+  if (using && !okUsing.has(using)) {
+    errors.push({ path: ymlPath, reason: `Unexpected runs.using="${using}" (allowed: ${[...okUsing].join(", ")})` });
+  }
 
   if (using === "composite") {
     if (!Array.isArray(obj?.runs?.steps) || obj.runs.steps.length === 0) {
-      fail(`Composite action must define runs.steps in ${ymlPath}`);
+      errors.push({ path: ymlPath, reason: `Composite action must define non-empty "runs.steps"` });
     }
   }
 }
 
-console.log(`✅ validate-action-metadata: OK (${actionDirs.length} actions checked)`);
+if (errors.length === 0) {
+  console.log(`✅ validate-action-metadata: PASS (${actionDirs.length} actions checked)`);
+  process.exit(0);
+}
+
+console.error(`❌ validate-action-metadata: FAIL (${errors.length} issues across ${actionDirs.length} actions)`);
+for (const e of errors) console.error(`- ${e.path}: ${e.reason}`);
+process.exit(1);
