@@ -133,7 +133,7 @@ jobs:
           EXAMPLE_DIR: examples/${{ matrix.stack }}-api-example
           EVIDENCE_ROOT: .audit/PIPE-BUILD/smoke/${{ matrix.stack }}
 
-      # 3) Evidence verification on success
+      # 3) Evidence verification on success.
       - name: Assert evidence exists (PASS)
         run: bash scripts/regression/assert-evidence.sh
         env:
