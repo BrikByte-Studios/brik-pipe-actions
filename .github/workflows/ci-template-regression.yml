@@ -141,7 +141,7 @@ jobs:
           EXPECT_VALIDATION: "true"
           EXPECT_SUCCESS: "true"
 
-      # 4) Force a validation FAIL and ensure failure evidence exists
+      # 4) Force a validation FAIL and ensure failure evidence exists.
       - name: Generate failing validation evidence (FAIL path)
         run: node scripts/regression/fail-validation.mjs
         env:
