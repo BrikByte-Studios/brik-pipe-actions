@@ -132,7 +132,7 @@ jobs:
           strict: false
           allow_unsafe_commands: false
 
-      # 2) Execute smoke pipeline using resolved config (install/lint/test/build).
+      # 2) Execute smoke pipeline using resolved config (install/lint/test/build)
       - name: Smoke build (contract runner)
         run: node scripts/regression/smoke-runner.mjs
         env:
