@@ -31,6 +31,14 @@ jobs:
       - name: Checkout brik-pipe-actions
         uses: actions/checkout@v4
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install deps
+        run: npm ci
+
       - name: YAML lint (workflows + actions)
         uses: ibiqlik/action-yamllint@v3
         with:
@@ -49,7 +57,6 @@ jobs:
         uses: rhysd/actionlint@v1.7.3
         with:
           args: "-color"
-
 
       - name: Validate action.yml metadata (composite actions)
         run: node scripts/regression/validate-action-metadata.mjs
