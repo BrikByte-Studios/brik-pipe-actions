@@ -46,7 +46,10 @@ jobs:
                 allowed-values: ["true", "false", "on", "off", "yes", "no"]
 
       - name: GitHub Actions workflow lint (actionlint)
-        uses: rhysd/actionlint@v1
+        uses: rhysd/actionlint@v1.7.3
+        with:
+          args: "-color"
+
 
       - name: Validate action.yml metadata (composite actions)
         run: node scripts/regression/validate-action-metadata.mjs
