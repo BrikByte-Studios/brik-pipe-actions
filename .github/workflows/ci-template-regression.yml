@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: ["main"]
+  schedule:
+    - cron: "0 2 * * *"  # nightly 02:00 UTC
 
 concurrency:
   group: template-regression-${{ github.ref }}
@@ -39,7 +41,8 @@ jobs:
   fast-static:
     name: Fast A) Static checks (always)
     needs: [changes]
-    if: ${{ needs.changes.outputs.fast == 'true' }}
+    # Run if fast changes OR if push to main (always protect main)
+    if: ${{ needs.changes.outputs.fast == 'true' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -86,7 +89,8 @@ jobs:
   schema-and-validator-tests:
     name: B) Schema + Validator Behavior Tests
     needs: [changes, fast-static]
-    if: ${{ needs.changes.outputs.fast == 'true' }}
+    # Run if fast changes OR if push to main
+    if: ${{ needs.changes.outputs.fast == 'true' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -116,7 +120,7 @@ jobs:
   smoke-builds-and-evidence:
     name: C+D) Smoke Builds (examples) + Evidence Verification
     needs: [changes, fast-static, schema-and-validator-tests]
-    if: ${{ needs.changes.outputs.smoke == 'true' }}
+    if: ${{ needs.changes.outputs.smoke == 'true' || github.event_name == 'push' || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
