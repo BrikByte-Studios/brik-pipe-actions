@@ -79,11 +79,11 @@ on:
       artifact_paths: {type: string, default: "__pycache__"}
     outputs:
       build_verdict:
-          value: ${{ jobs.build.outputs.build_verdict }}
+        value: ${{ jobs.build.outputs.build_verdict }}
       runtime_used:
-          value: ${{ jobs.build.outputs.runtime_used }}
+        value: ${{ jobs.build.outputs.runtime_used }}
       audit_bundle_path:
-          value: ${{ jobs.build.outputs.audit_bundle_path }}
+        value: ${{ jobs.build.outputs.audit_bundle_path }}
 
 jobs:
   build:
