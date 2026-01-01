@@ -2,26 +2,39 @@ name: PIPE-CORE-1.1.6 - Template Regression Tests
 
 on:
   pull_request:
-    paths:
-      - ".github/workflows/**"
-      - ".github/actions/**"
-      - "schemas/**"
-      - "internal/**"
-      - "scripts/**"
   push:
     branches: ["main"]
-    paths:
-      - ".github/workflows/**"
-      - ".github/actions/**"
-      - "schemas/**"
-      - "internal/**"
-      - "scripts/**"
 
 concurrency:
   group: template-regression-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      smoke: ${{ steps.filter.outputs.smoke }}
+      fast: ${{ steps.filter.outputs.fast }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed areas
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            fast:
+              - ".github/workflows/**"
+              - ".github/actions/**"
+              - "schemas/**"
+              - "scripts/**"
+              - "internal/**"
+            smoke:
+              - ".github/workflows/build-*.yml"
+              - ".github/actions/**"
+              - "schemas/**"
+              - "scripts/regression/**"
+              - "internal/vendor/runtime-matrix.yml"
   static-checks:
     name: A) Static Template Checks (YAML / action metadata / workflow_call)
     runs-on: ubuntu-latest
