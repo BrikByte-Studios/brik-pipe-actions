@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brikbyte.studios/schemas/evidence/pipe-image.evidence.schema.json",
+  "title": "BrikByteOS PIPE-IMAGE Evidence Contract (v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "inputs", "results"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "sha", "run_id", "workflow", "timestamp"],
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "sha": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "workflow": { "type": "string", "minLength": 1 },
+        "builder_used": { "type": "string", "enum": ["buildx", "kaniko"] },
+        "mode": { "type": "string", "enum": ["dry_run", "build_only", "build_and_push"] },
+        "timestamp": { "type": "string", "minLength": 1 },
+        "audit_bundle_path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context", "dockerfile", "image_name", "registry", "tags", "cache"],
+      "properties": {
+        "context": { "type": "string", "minLength": 1 },
+        "dockerfile": { "type": "string", "minLength": 1 },
+        "image_name": { "type": "string", "minLength": 1 },
+        "registry": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "cache": { "type": "string", "enum": ["enabled", "disabled"] },
+        "cache_mode": { "type": "string" },
+        "platforms": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict"],
+      "properties": {
+        "verdict": { "type": "string", "enum": ["pass", "fail"] },
+        "image_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "digest": { "type": "string" },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sha_tag_present": { "type": "boolean" },
+        "semver_tag_present": { "type": "boolean" },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
