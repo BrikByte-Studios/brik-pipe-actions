@@ -278,4 +278,3 @@ jobs:
           else
             echo "build_verdict=fail" >> "$GITHUB_OUTPUT"
           fi
-

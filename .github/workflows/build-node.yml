@@ -324,9 +324,25 @@ jobs:
         if: always()
         shell: bash
         run: |
-          if [ "${{ steps.buildstep.outcome }}" = "success" ] && \
-             ( [ "${{ steps.test.outcome }}" = "success" ] || [ "${{ steps.test.outcome }}" = "skipped" ] ) && \
-             ( [ "${{ steps.lint.outcome }}" = "success" ] || [ "${{ steps.lint.outcome }}" = "skipped" ] ); then
+          set -euo pipefail
+
+          # Pass means:
+          # - build succeeded AND
+          # - tests succeeded OR were intentionally skipped AND
+          # - lint succeeded OR was intentionally skipped
+
+          build_ok=false
+          test_ok=false
+          lint_ok=false
+
+          if [ "${{ steps.buildstep.outcome }}" = "success" ]; then
+            build_ok=true
+          fi
+
+          { [ "${{ steps.test.outcome }}" = "success" ] || [ "${{ steps.test.outcome }}" = "skipped" ]; } && test_ok=true || true
+          { [ "${{ steps.lint.outcome }}" = "success" ] || [ "${{ steps.lint.outcome }}" = "skipped" ]; } && lint_ok=true || true
+
+          if [ "$build_ok" = "true" ] && [ "$test_ok" = "true" ] && [ "$lint_ok" = "true" ]; then
             echo "build_verdict=pass" >> "$GITHUB_OUTPUT"
           else
             echo "build_verdict=fail" >> "$GITHUB_OUTPUT"
