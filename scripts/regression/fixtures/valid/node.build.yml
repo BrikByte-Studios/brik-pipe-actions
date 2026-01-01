@@ -1,0 +1,17 @@
+schemaVersion: 1
+stack: node
+workingDirectory: "."
+runtime:
+  version: "20"
+tool:
+  kind: "npm"
+flags:
+  runLint: true
+  runTests: true
+commands:
+  install: "echo install"
+  lint: "echo lint"
+  test: "echo test"
+  build: "echo build"
+artifacts:
+  paths: ["dist/**"]
