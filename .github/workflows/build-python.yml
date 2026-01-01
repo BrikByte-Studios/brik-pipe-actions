@@ -50,40 +50,40 @@ name: "brik: build-python (v1)"
 on:
   workflow_call:
     inputs:
-        # Path to execute commands from. Useful for monorepos or nested services.
-        working_directory: {type: string, default: "."}
+      # Path to execute commands from. Useful for monorepos or nested services.
+      working_directory: {type: string, default: "."}
 
-        # Optional override for Python runtime version. If blank, resolve from runtime-matrix.yml.
-        runtime_version: {type: string, default: ""}
+      # Optional override for Python runtime version. If blank, resolve from runtime-matrix.yml.
+      runtime_version: {type: string, default: ""}
 
-        # Optional override for package manager choice.
-        # Allowed: pip | poetry
-        # If blank, resolve from runtime-matrix.yml.
-        package_manager: {type: string, default: ""} # pip|poetry (defaults from matrix)
+      # Optional override for package manager choice.
+      # Allowed: pip | poetry
+      # If blank, resolve from runtime-matrix.yml.
+      package_manager: {type: string, default: ""} # pip|poetry (defaults from matrix)
 
-        # Lint step toggle (disabled by default for v1).
-        run_lint: {type: boolean, default: false}
+      # Lint step toggle (disabled by default for v1).
+      run_lint: {type: boolean, default: false}
 
-        # Test step toggle (enabled by default for v1).
-        run_tests: {type: boolean, default: true}
+      # Test step toggle (enabled by default for v1).
+      run_tests: {type: boolean, default: true}
 
-        # Optional overrides. If empty, canonical defaults are used.
-        lint_command: {type: string, default: ""}
-        test_command: {type: string, default: ""}
-        build_command: {type: string, default: ""}
+      # Optional overrides. If empty, canonical defaults are used.
+      lint_command: {type: string, default: ""}
+      test_command: {type: string, default: ""}
+      build_command: {type: string, default: ""}
 
-        # Upload evidence (.audit) as a workflow artifact.
-        upload_artifacts: {type: boolean, default: true`}
+      # Upload evidence (.audit) as a workflow artifact.
+      upload_artifacts: {type: boolean, default: true`}
 
-        # Used for evidence summarization (not publishing artifacts in v1).
-        artifact_paths: {type: string, default: "__pycache__"}
+      # Used for evidence summarization (not publishing artifacts in v1).
+      artifact_paths: {type: string, default: "__pycache__"}
     outputs:
-        build_verdict:
-            value: ${{ jobs.build.outputs.build_verdict }}
-        runtime_used:
-            value: ${{ jobs.build.outputs.runtime_used }}
-        audit_bundle_path:
-            value: ${{ jobs.build.outputs.audit_bundle_path }}
+      build_verdict:
+          value: ${{ jobs.build.outputs.build_verdict }}
+      runtime_used:
+          value: ${{ jobs.build.outputs.runtime_used }}
+      audit_bundle_path:
+          value: ${{ jobs.build.outputs.audit_bundle_path }}
 
 jobs:
   build:

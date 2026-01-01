@@ -56,14 +56,14 @@ on:
       # Optional overrides. If empty, canonical defaults are used.
       lint_command: {type: string, default: ""}
       test_command: {type: string, default: ""}
-      build_command: {type: string, default: "" }
+      build_command: {type: string, default: ""}
 
       # Upload evidence (.audit) as a workflow artifact.
       upload_artifacts: {type: boolean, default: true}
 
       # Used only for evidence summarization (not for publishing artifacts in v1).
       # Comma-separated list to avoid YAML array parsing complexity in workflow_call.
-      artifact_paths: {type: string, default: "bin,obj" }
+      artifact_paths: {type: string, default: "bin,obj"}
     outputs:
       # Caller-friendly outputs: keep consistent across all stacks.
       build_verdict:

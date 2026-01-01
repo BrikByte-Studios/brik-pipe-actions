@@ -63,7 +63,7 @@ on:
       # Optional overrides. If empty, canonical defaults are used.
       lint_command: {type: string, default: ""}
       test_command: {type: string, default: ""}
-      build_command: {type: string, default: "" }
+      build_command: {type: string, default: ""}
 
       # Upload evidence (.audit) as a workflow artifact.
       upload_artifacts: {type: boolean, default: true}
