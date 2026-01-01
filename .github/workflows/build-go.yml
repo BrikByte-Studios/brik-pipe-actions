@@ -49,29 +49,28 @@ on:
   workflow_call:
     inputs:
       # Path to execute build commands from. Supports monorepos or nested services.
-      working_directory: { type: string, default: "." }
+      working_directory: {type: string, default: "."}
 
       # Optional override for the Go version. If blank, resolve from runtime-matrix.yml.
-      runtime_version: { type: string, default: "" }
+      runtime_version: {type: string, default: ""}
 
       # Lint step toggle (golangci-lint by default).
-      run_lint: { type: boolean, default: false }
+      run_lint: {type: boolean, default: false}
 
       # Test step toggle (enabled by default for v1).
-      run_tests: { type: boolean, default: true }
+      run_tests: {type: boolean, default: true}
 
       # Optional overrides. If empty, canonical defaults are used.
-      lint_command: { type: string, default: "" }
-      test_command: { type: string, default: "" }
-      build_command: { type: string, default: "" }
+      lint_command: {type: string, default: ""}
+      test_command: {type: string, default: ""}
+      build_command: {type: string, default: "" }
 
       # Upload evidence (.audit) as a workflow artifact.
-      upload_artifacts: { type: boolean, default: true }
+      upload_artifacts: {type: boolean, default: true}
 
       # Used only for evidence summarization (not for publishing artifacts in v1).
       # Comma-separated list to avoid YAML array parsing complexity in workflow_call.
-      artifact_paths: { type: string, default: "bin" }
-
+      artifact_paths: {type: string, default: "bin"}
     outputs:
       # Caller-friendly outputs: keep consistent across all stacks.
       build_verdict:

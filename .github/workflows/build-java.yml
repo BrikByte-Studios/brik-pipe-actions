@@ -56,33 +56,33 @@ on:
   workflow_call:
     inputs:
       # Path to execute build commands from. Supports monorepos or nested services.
-      working_directory: { type: string, default: "." }
+      working_directory: {type: string, default: "."}
 
       # Optional override for the Java version. If blank, resolve from runtime-matrix.yml.
-      runtime_version: { type: string, default: "" }
+      runtime_version: {type: string, default: ""}
 
       # Optional override for build tool selection.
       # Allowed: maven | gradle
       # If blank, resolve from runtime-matrix.yml (build tool default).
-      build_tool: { type: string, default: "" } # maven|gradle
+      build_tool: {type: string, default: ""} # maven|gradle
 
       # Lint step toggle (disabled by default for v1).
-      run_lint: { type: boolean, default: false }
+      run_lint: {type: boolean, default: false}
 
       # Test step toggle (enabled by default for v1).
-      run_tests: { type: boolean, default: true }
+      run_tests: {type: boolean, default: true}
 
       # Optional overrides. If empty, canonical defaults are used.
-      lint_command: { type: string, default: "" }
-      test_command: { type: string, default: "" }
-      build_command: { type: string, default: "" }
+      lint_command: {type: string, default: ""}
+      test_command: {type: string, default: ""}
+      build_command: {type: string, default: ""}
 
       # Upload evidence (.audit) as a workflow artifact.
-      upload_artifacts: { type: boolean, default: true }
+      upload_artifacts: {type: boolean, default: true}
 
       # Used only for evidence summarization (not for publishing artifacts in v1).
       # Comma-separated list to avoid YAML array parsing complexity in workflow_call.
-      artifact_paths: { type: string, default: "target" }
+      artifact_paths: {type: string, default: "target"}
 
     outputs:
       # Caller-friendly outputs: keep consistent across all stacks.

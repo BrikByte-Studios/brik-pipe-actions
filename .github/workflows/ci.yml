@@ -3,7 +3,7 @@ name: brik-pipe-actions — CI & Governance
 on:
   pull_request:
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   governance:
