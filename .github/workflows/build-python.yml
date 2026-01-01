@@ -73,7 +73,7 @@ on:
       build_command: {type: string, default: ""}
 
       # Upload evidence (.audit) as a workflow artifact.
-      upload_artifacts: {type: boolean, default: true`}
+      upload_artifacts: {type: boolean, default: true}
 
       # Used for evidence summarization (not publishing artifacts in v1).
       artifact_paths: {type: string, default: "__pycache__"}
