@@ -1,0 +1,10 @@
+.git
+.github
+.audit
+bin
+out
+coverage*
+*.log
+.env
+.env.*
+.DS_Store

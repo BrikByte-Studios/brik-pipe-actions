@@ -1,0 +1,9 @@
+.git
+.github
+.audit
+bin
+obj
+*.log
+.env
+.env.*
+.DS_Store

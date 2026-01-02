@@ -1,0 +1,17 @@
+
+# Common ignores — copy into each scaffold .dockerignore as needed
+.git
+.github
+.audit
+node_modules
+dist
+build
+bin
+obj
+target
+out
+coverage*
+*.log
+.DS_Store
+.env
+.env.*
