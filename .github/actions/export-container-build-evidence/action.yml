@@ -1,0 +1,43 @@
+name: "brik: export-container-build-evidence"
+description: "Exports auditable evidence for container builds into .audit/PIPE-CONTAINER-BUILD (v1)."
+
+inputs:
+  builder: {required: true, description: "Builder used (kaniko|buildx)"}
+
+  working_directory: {required: false, default: "."}
+  context: {required: false, default: "."}
+  dockerfile: {required: false, default: "Dockerfile"}
+
+  image_name: {required: true}
+  tags: {required: true}
+  push: {required: false, default: "false"}
+
+  cache: {required: false, default: "true"}
+  cache_repo: {required: false, default: ""}
+
+  build_args: {required: false, default: ""}
+  labels: {required: false, default: ""}
+  registry: {required: false, default: "ghcr.io"}
+
+  image_ref: {required: false, default: ""}
+  digest: {required: false, default: ""}
+  tags_pushed: {required: false, default: ""}
+
+  kaniko_log:
+    required: false
+    default: ""
+    description: "Path to kaniko log (runner path), if available."
+
+outputs:
+  audit_bundle_path:
+    value: ${{ steps.export.outputs.audit_bundle_path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Export evidence
+      id: export
+      shell: bash
+      run: |
+        set -euo pipefail
+        node .github/actions/export-container-build-evidence/export.mjs

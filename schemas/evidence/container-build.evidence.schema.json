@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brikbyte.studios/schemas/evidence/container-build.evidence.schema.json",
+  "title": "BrikByteOS Evidence - Container Build (v1)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema", "audit_bundle_path", "timestamp", "repo", "sha", "run_id", "workflow", "job", "builder", "registry"],
+  "properties": {
+    "schema": { "type": "string", "const": "brikbyte.audit.container-build.v1" },
+    "audit_bundle_path": { "type": "string", "const": ".audit/PIPE-CONTAINER-BUILD" },
+    "timestamp": { "type": "string", "minLength": 10 },
+
+    "repo": { "type": "string", "minLength": 1 },
+    "sha": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "run_number": { "type": "string" },
+    "attempt": { "type": "string" },
+    "workflow": { "type": "string", "minLength": 1 },
+    "job": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string" },
+
+    "builder": { "type": "string", "enum": ["kaniko", "buildx"] },
+    "registry": { "type": "string", "minLength": 1 }
+  }
+}

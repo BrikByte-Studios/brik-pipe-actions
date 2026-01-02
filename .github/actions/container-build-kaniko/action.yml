@@ -1,0 +1,75 @@
+name: "brik: container-build-kaniko"
+description: "Daemonless container build using Kaniko with safe defaults + outputs for BrikByteOS v1."
+inputs:
+  working_directory:
+    description: "Base working directory for resolving context/dockerfile."
+    required: false
+    default: "."
+  context:
+    description: "Build context path (relative to working_directory)."
+    required: false
+    default: "."
+  dockerfile:
+    description: "Dockerfile path (relative to working_directory)."
+    required: false
+    default: "Dockerfile"
+
+  image_name:
+    description: 'Image name without tag. Example: "ghcr.io/org/repo/service".'
+    required: true
+
+  tags:
+    description: 'Comma-separated tags. Example: "sha-<sha>,v1.2.3".'
+    required: true
+
+  push:
+    description: "If true, pushes image to registry using provided auth."
+    required: false
+    default: "false"
+
+  cache:
+    description: "Enable Kaniko cache (remote layer cache)."
+    required: false
+    default: "true"
+  cache_repo:
+    description: "Remote cache repo. Example: ghcr.io/org/repo/cache"
+    required: false
+    default: ""
+
+  build_args:
+    description: "Build args as newline/comma-separated KEY=VAL list."
+    required: false
+    default: ""
+  labels:
+    description: "Image labels as newline/comma-separated KEY=VAL list."
+    required: false
+    default: ""
+
+  registry:
+    description: "Registry host (informational for metadata; auth still required for push)."
+    required: false
+    default: "ghcr.io"
+
+outputs:
+  image_ref:
+    description: "Canonical image ref (image_name)."
+    value: ${{ steps.run.outputs.image_ref }}
+  digest:
+    description: "Image digest (sha256:...) if available (typically on push)."
+    value: ${{ steps.run.outputs.digest }}
+  tags_pushed:
+    description: "Normalized comma-separated tags."
+    value: ${{ steps.run.outputs.tags_pushed }}
+  kaniko_log:
+    description: "Path to kaniko log file on runner."
+    value: ${{ steps.run.outputs.kaniko_log }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run Kaniko executor
+      id: run
+      shell: bash
+      run: |
+        set -euo pipefail
+        bash .github/actions/container-build-kaniko/run.sh

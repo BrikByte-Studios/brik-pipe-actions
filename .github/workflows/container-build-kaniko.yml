@@ -1,0 +1,164 @@
+name: "brik: container-build-kaniko (v1)"
+
+on:
+  workflow_call:
+    inputs:
+      working_directory: {type: string, default: "."}
+      context: {type: string, default: "."}
+      dockerfile: {type: string, default: "Dockerfile"}
+
+      # Canonical image name without tag. e.g. "ghcr.io/org/repo/service"
+      image_name: {type: string, required: true}
+
+      # Comma-separated tags. e.g. "sha-<sha>,v1.2.3"
+      tags: {type: string, required: true}
+
+      push: {type: boolean, default: false}
+
+      cache: {type: boolean, default: true}
+      cache_repo: {type: string, default: ""}
+
+      # "KEY=VAL" list; supports newline OR comma separated
+      build_args: {type: string, default: ""}
+
+      # "KEY=VAL" list; supports newline OR comma separated
+      labels: {type: string, default: ""}
+
+      # Registry host (informational for v1, used in metadata)
+      registry: {type: string, default: "ghcr.io"}
+
+      upload_artifacts: {type: boolean, default: true}
+
+      # Optional: enforce evidence JSON schema (recommended)
+      validate_evidence_schema: {type: boolean, default: true}
+
+    secrets:
+      registry_username:
+        required: false
+      registry_password:
+        required: false
+
+    outputs:
+      image_ref:
+        value: ${{ jobs.build.outputs.image_ref }}
+      digest:
+        value: ${{ jobs.build.outputs.digest }}
+      tags_pushed:
+        value: ${{ jobs.build.outputs.tags_pushed }}
+      audit_bundle_path:
+        value: ${{ jobs.build.outputs.audit_bundle_path }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_ref: ${{ steps.kaniko.outputs.image_ref }}
+      digest: ${{ steps.kaniko.outputs.digest }}
+      tags_pushed: ${{ steps.kaniko.outputs.tags_pushed }}
+      audit_bundle_path: ${{ steps.evidence.outputs.audit_bundle_path }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # NOTE:
+      # Kaniko is "daemonless" for the build process itself (no docker.sock required inside).
+      # On GitHub-hosted runners, we still use the runner's container runtime to launch Kaniko.
+      # In hardened environments, use self-hosted runners with container runtime support.
+
+      - name: Run Kaniko build (Build-only or Build+Push)
+        id: kaniko
+        uses: ./.github/actions/container-build-kaniko
+        with:
+          working_directory: ${{ inputs.working_directory }}
+          context: ${{ inputs.context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          image_name: ${{ inputs.image_name }}
+          tags: ${{ inputs.tags }}
+          push: ${{ inputs.push }}
+          cache: ${{ inputs.cache }}
+          cache_repo: ${{ inputs.cache_repo }}
+          build_args: ${{ inputs.build_args }}
+          labels: ${{ inputs.labels }}
+          registry: ${{ inputs.registry }}
+        env:
+          REGISTRY_USERNAME: ${{ secrets.registry_username }}
+          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
+
+      - name: Export evidence (.audit/PIPE-CONTAINER-BUILD)
+        id: evidence
+        if: always()
+        uses: ./.github/actions/export-container-build-evidence
+        with:
+          builder: "kaniko"
+          working_directory: ${{ inputs.working_directory }}
+          context: ${{ inputs.context }}
+          dockerfile: ${{ inputs.dockerfile }}
+          image_name: ${{ inputs.image_name }}
+          tags: ${{ inputs.tags }}
+          push: ${{ inputs.push }}
+          cache: ${{ inputs.cache }}
+          cache_repo: ${{ inputs.cache_repo }}
+          build_args: ${{ inputs.build_args }}
+          labels: ${{ inputs.labels }}
+          registry: ${{ inputs.registry }}
+          # Capture outputs if available (may be empty on failure)
+          image_ref: ${{ steps.kaniko.outputs.image_ref }}
+          digest: ${{ steps.kaniko.outputs.digest }}
+          tags_pushed: ${{ steps.kaniko.outputs.tags_pushed }}
+          # Point to logs produced by the Kaniko action
+          kaniko_log: ${{ steps.kaniko.outputs.kaniko_log }}
+
+      - name: Validate evidence JSON (schema)
+        if: ${{ inputs.validate_evidence_schema && always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "
+            /**
+             * Lightweight JSON Schema validation for evidence contract.
+             * Keeps governance deterministic and catches missing keys early.
+             */
+            const fs = require('fs');
+            const path = require('path');
+            const Ajv = require('ajv');
+            const addFormats = require('ajv-formats');
+
+            const schemaPath = path.resolve('schemas/evidence/container-build.evidence.schema.json');
+            const evidencePath = path.resolve('.audit/PIPE-CONTAINER-BUILD/metadata.json');
+
+            if (!fs.existsSync(schemaPath)) {
+              console.error('Evidence schema missing at: ' + schemaPath);
+              process.exit(1);
+            }
+            if (!fs.existsSync(evidencePath)) {
+              console.error('Evidence metadata missing at: ' + evidencePath);
+              process.exit(1);
+            }
+
+            const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+            const data = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+
+            const ajv = new Ajv({ allErrors: true, strict: false });
+            addFormats(ajv);
+
+            const validate = ajv.compile(schema);
+            const ok = validate(data);
+            if (!ok) {
+              console.error('❌ Evidence schema validation failed:');
+              console.error(JSON.stringify(validate.errors, null, 2));
+              process.exit(1);
+            }
+            console.log('✅ Evidence schema validation passed.');
+          "
+        env:
+          # Ajv is a dev dependency; ensure it's in package.json for brik-pipe-actions
+          NODE_OPTIONS: ""
+
+      - name: Upload evidence artifact
+        if: ${{ inputs.upload_artifacts && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-pipe-container-build-kaniko
+          path: .audit/PIPE-CONTAINER-BUILD
