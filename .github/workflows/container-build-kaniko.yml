@@ -3,34 +3,57 @@ name: "brik: container-build-kaniko (v1)"
 on:
   workflow_call:
     inputs:
-      working_directory: {type: string, default: "."}
-      context: {type: string, default: "."}
-      dockerfile: {type: string, default: "Dockerfile"}
+      working_directory:
+        type: string
+        default: "."
+      context:
+        type: string
+        default: "."
+      dockerfile:
+        type: string
+        default: "Dockerfile"
 
-      # Canonical image name without tag. e.g. "ghcr.io/org/repo/service"
-      image_name: {type: string, required: true}
+      image_name:
+        type: string
+        required: true
+      tags:
+        type: string
+        required: true
 
-      # Comma-separated tags. e.g. "sha-<sha>,v1.2.3"
-      tags: {type: string, required: true}
+      push:
+        type: boolean
+        default: false
 
-      push: {type: boolean, default: false}
+      cache_enabled:
+        type: boolean
+        default: true
+      cache_mode:
+        type: string
+        default: "registry" # registry only for kaniko v1
+      cache_repo:
+        type: string
+        default: ""
 
-      cache: {type: boolean, default: true}
-      cache_repo: {type: string, default: ""}
+      build_args:
+        type: string
+        default: ""
+      labels:
+        type: string
+        default: ""
 
-      # "KEY=VAL" list; supports newline OR comma separated
-      build_args: {type: string, default: ""}
+      registry:
+        type: string
+        default: "ghcr.io"
+      auth_mode:
+        type: string
+        default: "none" # none|secrets|oidc (oidc may be experimental)
 
-      # "KEY=VAL" list; supports newline OR comma separated
-      labels: {type: string, default: ""}
-
-      # Registry host (informational for v1, used in metadata)
-      registry: {type: string, default: "ghcr.io"}
-
-      upload_artifacts: {type: boolean, default: true}
-
-      # Optional: enforce evidence JSON schema (recommended)
-      validate_evidence_schema: {type: boolean, default: true}
+      upload_artifacts:
+        type: boolean
+        default: true
+      validate_evidence_schema:
+        type: boolean
+        default: true
 
     secrets:
       registry_username:
@@ -45,13 +68,16 @@ on:
         value: ${{ jobs.build.outputs.digest }}
       tags_pushed:
         value: ${{ jobs.build.outputs.tags_pushed }}
-      audit_bundle_path:
+      audit_bundle_path: 
         value: ${{ jobs.build.outputs.audit_bundle_path }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write # needed for GHCR push (secrets-mode)
+      id-token: write # only used if auth_mode=oidc (safe to keep; or guard via separate workflow)
     outputs:
       image_ref: ${{ steps.kaniko.outputs.image_ref }}
       digest: ${{ steps.kaniko.outputs.digest }}
@@ -62,11 +88,32 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # NOTE:
-      # Kaniko is "daemonless" for the build process itself (no docker.sock required inside).
-      # On GitHub-hosted runners, we still use the runner's container runtime to launch Kaniko.
-      # In hardened environments, use self-hosted runners with container runtime support.
+      # 1) Cache contract: normalize + decide if cache writes allowed
+      - name: Resolve cache config
+        id: cache
+        uses: ./.github/actions/container-cache-config
+        with:
+          builder: kaniko
+          cache_enabled: ${{ inputs.cache_enabled }}
+          cache_mode: ${{ inputs.cache_mode }}
+          cache_repo: ${{ inputs.cache_repo }}
+          dockerfile: ${{ inputs.dockerfile }}
+          allow_cache_write: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+          cache_scope: "kaniko"
 
+      # 2) Auth contract: produce sanitized method_used + (optionally) DOCKER_CONFIG path
+      - name: Registry auth contract (sanitized)
+        id: auth
+        uses: ./.github/actions/container-registry-auth
+        with:
+          builder: kaniko
+          registry: ${{ inputs.registry }}
+          auth_mode: ${{ inputs.auth_mode }}
+          push: ${{ inputs.push }}
+          registry_username: ${{ secrets.registry_username || '' }}
+          registry_password: ${{ secrets.registry_password || '' }}
+
+      # 3) Kaniko build step (build-only default via push=false)
       - name: Run Kaniko build (Build-only or Build+Push)
         id: kaniko
         uses: ./.github/actions/container-build-kaniko
@@ -77,15 +124,19 @@ jobs:
           image_name: ${{ inputs.image_name }}
           tags: ${{ inputs.tags }}
           push: ${{ inputs.push }}
-          cache: ${{ inputs.cache }}
-          cache_repo: ${{ inputs.cache_repo }}
+
+          cache: ${{ steps.cache.outputs.cache_enabled }}
+          cache_repo: ${{ steps.cache.outputs.cache_repo }}
+          allow_cache_write: ${{ steps.cache.outputs.allow_cache_write }}
+
           build_args: ${{ inputs.build_args }}
           labels: ${{ inputs.labels }}
           registry: ${{ inputs.registry }}
-        env:
-          REGISTRY_USERNAME: ${{ secrets.registry_username }}
-          REGISTRY_PASSWORD: ${{ secrets.registry_password }}
 
+          # IMPORTANT: pass docker config path created by auth helper (secrets-mode)
+          docker_config_dir: ${{ steps.auth.outputs.docker_config_dir }}
+
+      # 4) Evidence export (always)
       - name: Export evidence (.audit/PIPE-CONTAINER-BUILD)
         id: evidence
         if: always()
@@ -98,64 +149,36 @@ jobs:
           image_name: ${{ inputs.image_name }}
           tags: ${{ inputs.tags }}
           push: ${{ inputs.push }}
-          cache: ${{ inputs.cache }}
-          cache_repo: ${{ inputs.cache_repo }}
+
+          cache: ${{ steps.cache.outputs.cache_enabled }}
+          cache_repo: ${{ steps.cache.outputs.cache_repo }}
+          cache_mode: ${{ steps.cache.outputs.cache_mode }}
+          cache_key: ${{ steps.cache.outputs.cache_key }}
+          allow_cache_write: ${{ steps.cache.outputs.allow_cache_write }}
+
+          auth_mode: ${{ inputs.auth_mode }}
+          auth_method_used: ${{ steps.auth.outputs.method_used }}
+          registry: ${{ inputs.registry }}
+
           build_args: ${{ inputs.build_args }}
           labels: ${{ inputs.labels }}
-          registry: ${{ inputs.registry }}
-          # Capture outputs if available (may be empty on failure)
+
           image_ref: ${{ steps.kaniko.outputs.image_ref }}
           digest: ${{ steps.kaniko.outputs.digest }}
           tags_pushed: ${{ steps.kaniko.outputs.tags_pushed }}
-          # Point to logs produced by the Kaniko action
+
           kaniko_log: ${{ steps.kaniko.outputs.kaniko_log }}
+          duration_ms: ${{ steps.kaniko.outputs.duration_ms }}
 
-      - name: Validate evidence JSON (schema)
+      # 5) Validate evidence schema (recommended)
+      - name: Validate evidence schema
         if: ${{ inputs.validate_evidence_schema && always() }}
-        shell: bash
         run: |
-          set -euo pipefail
-          node -e "
-            /**
-             * Lightweight JSON Schema validation for evidence contract.
-             * Keeps governance deterministic and catches missing keys early.
-             */
-            const fs = require('fs');
-            const path = require('path');
-            const Ajv = require('ajv');
-            const addFormats = require('ajv-formats');
+          node scripts/regression/validate-evidence.mjs \
+            --schema schemas/evidence/container-build.evidence.schema.json \
+            --file .audit/PIPE-CONTAINER-BUILD/metadata.json
 
-            const schemaPath = path.resolve('schemas/evidence/container-build.evidence.schema.json');
-            const evidencePath = path.resolve('.audit/PIPE-CONTAINER-BUILD/metadata.json');
-
-            if (!fs.existsSync(schemaPath)) {
-              console.error('Evidence schema missing at: ' + schemaPath);
-              process.exit(1);
-            }
-            if (!fs.existsSync(evidencePath)) {
-              console.error('Evidence metadata missing at: ' + evidencePath);
-              process.exit(1);
-            }
-
-            const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
-            const data = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
-
-            const ajv = new Ajv({ allErrors: true, strict: false });
-            addFormats(ajv);
-
-            const validate = ajv.compile(schema);
-            const ok = validate(data);
-            if (!ok) {
-              console.error('❌ Evidence schema validation failed:');
-              console.error(JSON.stringify(validate.errors, null, 2));
-              process.exit(1);
-            }
-            console.log('✅ Evidence schema validation passed.');
-          "
-        env:
-          # Ajv is a dev dependency; ensure it's in package.json for brik-pipe-actions
-          NODE_OPTIONS: ""
-
+      # 6) Upload evidence
       - name: Upload evidence artifact
         if: ${{ inputs.upload_artifacts && always() }}
         uses: actions/upload-artifact@v4

@@ -1,0 +1,73 @@
+name: container-registry-auth
+description: "Standard registry auth contract for BrikByteOS container builds (OIDC-first, secrets fallback)."
+
+inputs:
+  registry:
+    description: "Registry host (e.g., ghcr.io, index.docker.io, public.ecr.aws)"
+    required: false
+    default: "ghcr.io"
+  auth_mode:
+    description: "Auth mode: none | secrets | oidc"
+    required: false
+    default: "none"
+  builder:
+    description: "Builder target: buildx | kaniko"
+    required: true
+  push:
+    description: "Whether the workflow is pushing images"
+    required: false
+    default: "false"
+
+  # Secrets mode (baseline)
+  registry_username:
+    description: "Username for secrets mode"
+    required: false
+    default: ""
+  registry_password:
+    description: "Password/token for secrets mode"
+    required: false
+    default: ""
+
+  # OIDC mode (cloud registries): optional, registry-specific.
+  oidc_provider:
+    description: "Cloud provider: aws | gcp | azure (optional hint)"
+    required: false
+    default: ""
+  workload_identity_provider:
+    description: "GCP/Azure workload identity provider identifier (optional)"
+    required: false
+    default: ""
+  oidc_service_account:
+    description: "GCP service account email or Azure principal (optional)"
+    required: false
+    default: ""
+
+outputs:
+  method_used:
+    description: "Sanitized method used: none | secrets | oidc"
+    value: ${{ steps.run.outputs.method_used }}
+  auth_config_path:
+    description: "For Kaniko: DOCKER_CONFIG directory path (if created)"
+    value: ${{ steps.run.outputs.auth_config_path }}
+  registry_host_for_auth:
+    description: "Effective host used for auth (may differ from registry input for some registries)"
+    value: ${{ steps.run.outputs.registry_host_for_auth }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run auth setup
+      id: run
+      shell: bash
+      run: |
+        node .github/actions/container-registry-auth/run.mjs
+      env:
+        INPUT_REGISTRY: ${{ inputs.registry }}
+        INPUT_AUTH_MODE: ${{ inputs.auth_mode }}
+        INPUT_BUILDER: ${{ inputs.builder }}
+        INPUT_PUSH: ${{ inputs.push }}
+        INPUT_REGISTRY_USERNAME: ${{ inputs.registry_username }}
+        INPUT_REGISTRY_PASSWORD: ${{ inputs.registry_password }}
+        INPUT_OIDC_PROVIDER: ${{ inputs.oidc_provider }}
+        INPUT_WORKLOAD_IDENTITY_PROVIDER: ${{ inputs.workload_identity_provider }}
+        INPUT_OIDC_SERVICE_ACCOUNT: ${{ inputs.oidc_service_account }}

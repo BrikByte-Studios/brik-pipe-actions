@@ -1,37 +1,40 @@
 /**
- * Validate evidence bundle structure + metadata.json against schema.
+ * CLI helper to validate evidence JSON against a schema using AJV.
  *
- * Enforces governance safeguard:
- * - Evidence exists on success AND failure
- * - metadata.json includes required keys
+ * Usage:
+ *   node scripts/regression/validate-evidence.mjs --schema <schema.json> --file <metadata.json>
  */
+
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import Ajv from "ajv";
 
-function fail(msg) {
-  console.error(`❌ validate-evidence: ${msg}`);
+function arg(name) {
+  const idx = process.argv.indexOf(name);
+  if (idx === -1) return "";
+  return process.argv[idx + 1] || "";
+}
+
+const schemaPath = arg("--schema");
+const filePath = arg("--file");
+
+if (!schemaPath || !filePath) {
+  console.error("Usage: --schema <path> --file <path>");
+  process.exit(2);
+}
+
+const schema = JSON.parse(fs.readFileSync(path.resolve(schemaPath), "utf8"));
+const data = JSON.parse(fs.readFileSync(path.resolve(filePath), "utf8"));
+
+const ajv = new Ajv({ allErrors: true, strict: false });
+const validate = ajv.compile(schema);
+const ok = validate(data);
+
+if (!ok) {
+  console.error("❌ evidence validation failed:");
+  console.error(validate.errors);
   process.exit(1);
 }
 
-const root = process.env.EVIDENCE_ROOT;
-if (!root) fail("EVIDENCE_ROOT env missing");
-
-const metaPath = path.join(root, "metadata.json");
-if (!fs.existsSync(metaPath)) fail(`metadata.json missing at ${metaPath}`);
-
-const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-
-const schemaPath = path.resolve("scripts/regression/schemas/metadata.schema.json");
-if (!fs.existsSync(schemaPath)) fail(`metadata schema missing: ${schemaPath}`);
-
-const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
-const ajv = new Ajv({ allErrors: true });
-const validate = ajv.compile(schema);
-
-if (!validate(meta)) {
-  console.error(validate.errors);
-  fail(`metadata.json does not match schema: ${metaPath}`);
-}
-
-console.log(`✅ validate-evidence: OK (${root})`);
+console.log("✅ evidence validation OK");

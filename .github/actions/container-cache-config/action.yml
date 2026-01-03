@@ -1,0 +1,67 @@
+name: container-cache-config
+description: "Standard cache strategy for container builds (Buildx: gha|registry, Kaniko: registry)."
+
+inputs:
+  builder:
+    description: "buildx | kaniko"
+    required: true
+  cache_enabled:
+    description: "true|false"
+    required: false
+    default: "true"
+  cache_mode:
+    description: "Buildx: gha|registry; Kaniko: registry"
+    required: false
+    default: "gha"
+  cache_repo:
+    description: "OCI repo ref for registry cache (e.g., ghcr.io/org/repo/cache)"
+    required: false
+    default: ""
+  allow_cache_write:
+    description: "true|false (disable writes on forks/untrusted contexts)"
+    required: false
+    default: "true"
+  cache_scope:
+    description: "Optional additional scope string (e.g., stack name)"
+    required: false
+    default: ""
+  dockerfile:
+    description: "Dockerfile path used for cache key scoping"
+    required: false
+    default: "Dockerfile"
+
+outputs:
+  cache_enabled:
+    value: ${{ steps.run.outputs.cache_enabled }}
+  cache_mode:
+    value: ${{ steps.run.outputs.cache_mode }}
+  cache_repo:
+    value: ${{ steps.run.outputs.cache_repo }}
+  cache_from:
+    description: "Buildx cache-from string"
+    value: ${{ steps.run.outputs.cache_from }}
+  cache_to:
+    description: "Buildx cache-to string (may be empty if writes disabled)"
+    value: ${{ steps.run.outputs.cache_to }}
+  kaniko_cache_args:
+    description: "Kaniko cache args string"
+    value: ${{ steps.run.outputs.kaniko_cache_args }}
+  cache_key:
+    description: "Sanitized cache key for evidence/observability"
+    value: ${{ steps.run.outputs.cache_key }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: run
+      shell: bash
+      run: |
+        node .github/actions/container-cache-config/run.mjs
+      env:
+        INPUT_BUILDER: ${{ inputs.builder }}
+        INPUT_CACHE_ENABLED: ${{ inputs.cache_enabled }}
+        INPUT_CACHE_MODE: ${{ inputs.cache_mode }}
+        INPUT_CACHE_REPO: ${{ inputs.cache_repo }}
+        INPUT_ALLOW_CACHE_WRITE: ${{ inputs.allow_cache_write }}
+        INPUT_CACHE_SCOPE: ${{ inputs.cache_scope }}
+        INPUT_DOCKERFILE: ${{ inputs.dockerfile }}

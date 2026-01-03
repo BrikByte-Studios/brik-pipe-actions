@@ -22,6 +22,34 @@ inputs:
   image_ref: {required: false, default: ""}
   digest: {required: false, default: ""}
   tags_pushed: {required: false, default: ""}
+  auth_mode: { required: false, default: "none", description: "none|secrets|oidc (sanitized)" }
+  auth_method_used: { required: false, default: "none", description: "none|secrets|oidc (sanitized)" }
+
+  cache_mode:
+    required: false
+    default: "disabled"
+    description: "disabled|gha|registry (buildx supports gha|registry; kaniko uses registry)"
+
+  cache_key:
+    required: false
+    default: ""
+    description: "Sanitized cache key/scope for observability (no secrets)."
+
+  allow_cache_write:
+    required: false
+    default: "true"
+    description: "Whether cache writes were allowed in this run (e.g., false for fork PRs)."
+
+  duration_ms:
+    required: false
+    default: ""
+    description: "Best-effort duration in ms for the build step."
+
+  buildx_log:
+    required: false
+    default: ""
+    description: "Path to buildx log (runner path), if available."
+
 
   kaniko_log:
     required: false
