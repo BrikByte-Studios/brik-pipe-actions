@@ -73,4 +73,4 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        node .github/actions/enforce-image-tag-policy/enforce.mjs
+        node "$GITHUB_ACTION_PATH/enforce.mjs"

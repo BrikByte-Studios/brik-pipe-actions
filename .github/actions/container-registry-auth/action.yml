@@ -60,7 +60,7 @@ runs:
       id: run
       shell: bash
       run: |
-        node .github/actions/container-registry-auth/run.mjs
+        node "$GITHUB_ACTION_PATH/run.mjs"
       env:
         INPUT_REGISTRY: ${{ inputs.registry }}
         INPUT_AUTH_MODE: ${{ inputs.auth_mode }}

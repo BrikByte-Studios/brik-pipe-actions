@@ -56,7 +56,7 @@ runs:
     - id: run
       shell: bash
       run: |
-        node .github/actions/container-cache-config/run.mjs
+        node "$GITHUB_ACTION_PATH/run.mjs"
       env:
         INPUT_BUILDER: ${{ inputs.builder }}
         INPUT_CACHE_ENABLED: ${{ inputs.cache_enabled }}

@@ -68,4 +68,4 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        node .github/actions/export-container-build-evidence/export.mjs
+        node "$GITHUB_ACTION_PATH/export.mjs"
