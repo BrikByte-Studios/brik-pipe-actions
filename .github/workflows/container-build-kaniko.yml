@@ -55,7 +55,7 @@ on:
         type: boolean
         default: true
 
-      # --- PIPE-CORE-1.2.5 Tag Policy (v1) ---
+      # --- Tag Policy (v1) ---
       enforce_tag_policy:
         type: boolean
         default: true
@@ -87,8 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # needed for GHCR push (secrets-mode)
-      id-token: write # only used if auth_mode=oidc (safe to keep; or guard via separate workflow)
+      packages: write
+      id-token: write
 
     outputs:
       image_ref: ${{ steps.kaniko.outputs.image_ref }}
@@ -97,26 +97,38 @@ jobs:
       audit_bundle_path: ${{ steps.evidence.outputs.audit_bundle_path }}
 
     steps:
-      - name: Checkout repo
+      # 1) Checkout CALLER repo (brik-pipe-examples) - contains the app + Dockerfile
+      - name: Checkout caller repo
         uses: actions/checkout@v4
 
-      # 1) Cache contract: normalize + decide if cache writes allowed
+      # 2) Checkout PIPE actions repo (brik-pipe-actions) into a subfolder
+      #    This makes local composite actions + schemas available.
+      - name: Checkout brik-pipe-actions (tooling)
+        uses: actions/checkout@v4
+        with:
+          repository: BrikByte-Studios/brik-pipe-actions
+          ref: main
+          path: .brik/pipe
+
+      # 3) Cache contract
       - name: Resolve cache config
         id: cache
-        uses: ./.github/actions/container-cache-config
+        uses: ./.brik/pipe/.github/actions/container-cache-config
         with:
           builder: kaniko
           cache_enabled: ${{ inputs.cache_enabled }}
           cache_mode: ${{ inputs.cache_mode }}
           cache_repo: ${{ inputs.cache_repo }}
           dockerfile: ${{ inputs.dockerfile }}
-          allow_cache_write: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
+          allow_cache_write: >-
+            ${{ github.event_name != 'pull_request' ||
+                (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) }}
           cache_scope: "kaniko"
 
-      # 2) Auth contract: produce sanitized method_used + (optionally) DOCKER_CONFIG path
+      # 4) Auth contract (produces docker_config_dir for secrets-mode)
       - name: Registry auth contract (sanitized)
         id: auth
-        uses: ./.github/actions/container-registry-auth
+        uses: ./.brik/pipe/.github/actions/container-registry-auth
         with:
           builder: kaniko
           registry: ${{ inputs.registry }}
@@ -125,10 +137,10 @@ jobs:
           registry_username: ${{ secrets.registry_username || '' }}
           registry_password: ${{ secrets.registry_password || '' }}
 
-      # --- PIPE-CORE-1.2.5: Enforce tag policy BEFORE build/push ---
+      # 5) Tag policy gate BEFORE build/push
       - name: Enforce image tagging policy (PIPE-CORE-1.2.5)
         id: tag_policy
-        uses: ./.github/actions/enforce-image-tag-policy
+        uses: ./.brik/pipe/.github/actions/enforce-image-tag-policy
         with:
           push: ${{ inputs.push }}
           tags: ${{ inputs.tags }}
@@ -137,10 +149,10 @@ jobs:
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
 
-      # 3) Kaniko build step (build-only default via push=false)
+      # 6) Kaniko build
       - name: Run Kaniko build (Build-only or Build+Push)
         id: kaniko
-        uses: ./.github/actions/container-build-kaniko
+        uses: ./.brik/pipe/.github/actions/container-build-kaniko
         with:
           working_directory: ${{ inputs.working_directory }}
           context: ${{ inputs.context }}
@@ -157,14 +169,13 @@ jobs:
           labels: ${{ inputs.labels }}
           registry: ${{ inputs.registry }}
 
-          # IMPORTANT: pass docker config path created by auth helper (secrets-mode)
           docker_config_dir: ${{ steps.auth.outputs.docker_config_dir }}
 
-      # 4) Evidence export (always)
+      # 7) Evidence export (always)
       - name: Export evidence (.audit/PIPE-CONTAINER-BUILD)
         id: evidence
         if: always()
-        uses: ./.github/actions/export-container-build-evidence
+        uses: ./.brik/pipe/.github/actions/export-container-build-evidence
         with:
           builder: "kaniko"
           working_directory: ${{ inputs.working_directory }}
@@ -194,22 +205,22 @@ jobs:
           kaniko_log: ${{ steps.kaniko.outputs.kaniko_log }}
           duration_ms: ${{ steps.kaniko.outputs.duration_ms }}
 
-      # 5) Validate evidence schema (recommended)
+      # 8) Validate evidence schema (use schemas shipped in brik-pipe-actions)
       - name: Validate evidence schema
         if: ${{ inputs.validate_evidence_schema && always() }}
         run: |
-          node scripts/regression/validate-evidence.mjs \
-            --schema schemas/evidence/container-build.evidence.schema.json \
+          node .brik/pipe/scripts/regression/validate-evidence.mjs \
+            --schema .brik/pipe/schemas/evidence/container-build.evidence.schema.json \
             --file .audit/PIPE-CONTAINER-BUILD/metadata.json
 
       - name: Validate tag policy evidence schema
         if: ${{ inputs.validate_evidence_schema && always() }}
         run: |
-          node scripts/regression/validate-evidence.mjs \
-            --schema schemas/evidence/container-tag-policy.evidence.schema.json \
+          node .brik/pipe/scripts/regression/validate-evidence.mjs \
+            --schema .brik/pipe/schemas/evidence/container-tag-policy.evidence.schema.json \
             --file .audit/PIPE-CONTAINER-BUILD/policy/policy-summary.json
 
-      # 6) Upload evidence
+      # 9) Upload evidence
       - name: Upload evidence artifact
         if: ${{ inputs.upload_artifacts && always() }}
         uses: actions/upload-artifact@v4
