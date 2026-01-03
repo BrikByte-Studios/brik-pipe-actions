@@ -136,26 +136,17 @@ jobs:
           push: ${{ inputs.push }}
           registry_username: ${{ secrets.registry_username || '' }}
           registry_password: ${{ secrets.registry_password || '' }}
-
-      - name: Debug workflow_call inputs (tags)
-        run: |
-          echo "inputs.image_name='${{ inputs.image_name }}'"
-          echo "inputs.tags='${{ inputs.tags }}'"
-          echo "inputs.push='${{ inputs.push }}'"
-
-      - name: Debug INPUT_* seen by action
-        shell: bash
-        run: |
-          echo "Inside action:"
-          echo "INPUT_TAGS='${INPUT_TAGS:-}'"
-          echo "INPUT_PUSH='${INPUT_PUSH:-}'"
-          echo "GITHUB_ACTION_PATH='$GITHUB_ACTION_PATH'"
-          ls -la "$GITHUB_ACTION_PATH"
-        
       # 5) Tag policy gate BEFORE build/push
       - name: Enforce image tagging policy (PIPE-CORE-1.2.5)
         id: tag_policy
         uses: ./.brik/pipe/.github/actions/enforce-image-tag-policy
+        env:
+          INPUT_PUSH: ${{ inputs.push }}
+          INPUT_TAGS: ${{ inputs.tags }}
+          INPUT_ALLOW_LATEST: ${{ inputs.allow_latest }}
+          INPUT_RELEASE: ${{ inputs.release }}
+          INPUT_EVIDENCE_ROOT: .audit/PIPE-CONTAINER-BUILD
+          INPUT_ENFORCE_TAG_POLICY: ${{ inputs.enforce_tag_policy }}
         with:
           push: ${{ inputs.push }}
           tags: ${{ inputs.tags }}
@@ -164,6 +155,7 @@ jobs:
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
 
+          
       # Fallback if tags_resolved is empty for any reason
       - name: Resolve tags for build (policy fallback)
         id: tags_final
