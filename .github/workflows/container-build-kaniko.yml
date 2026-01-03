@@ -154,22 +154,7 @@ jobs:
           release: ${{ inputs.release }}
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
-
           
-      # Fallback if tags_resolved is empty for any reason
-      - name: Resolve tags for build (policy fallback)
-        id: tags_final
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESOLVED="${{ steps.tag_policy.outputs.tags_resolved }}"
-          if [ -z "$RESOLVED" ]; then
-            echo "tags_final=${{ inputs.tags }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tags_final=$RESOLVED" >> "$GITHUB_OUTPUT"
-          fi
-
-
       - name: Debug resolved tags
         run: |
           echo "resolved tags = '${{ steps.tag_policy.outputs.tags_resolved }}'"
