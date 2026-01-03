@@ -228,13 +228,21 @@ docker run --rm \
   "${LABEL_FLAGS[@]}" \
   --digest-file="/workspace/.kaniko-digest.txt" \
   >> "${KANIKO_LOG}" 2>&1 || {
+    rc=$?
+
     # Capture digest if present even on failure
     if [ -f "${CONTEXT_PATH}/.kaniko-digest.txt" ]; then
       cp "${CONTEXT_PATH}/.kaniko-digest.txt" "${DIGEST_FILE}" || true
     fi
+
+    echo "❌ Kaniko executor failed (exit=${rc}). Showing last 200 log lines:" >&2
+    echo "----- kaniko.log (tail) -----" >&2
+    tail -n 200 "${KANIKO_LOG}" >&2 || true
+    echo "-----------------------------" >&2
+
     fail "Kaniko executor failed. See ${KANIKO_LOG}"
   }
-
+  
 # Copy digest out of workspace if present
 if [ -f "${CONTEXT_PATH}/.kaniko-digest.txt" ]; then
   cp "${CONTEXT_PATH}/.kaniko-digest.txt" "${DIGEST_FILE}" || true
