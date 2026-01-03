@@ -142,8 +142,16 @@ jobs:
           echo "inputs.image_name='${{ inputs.image_name }}'"
           echo "inputs.tags='${{ inputs.tags }}'"
           echo "inputs.push='${{ inputs.push }}'"
-        
 
+      - name: Debug INPUT_* seen by action
+        shell: bash
+        run: |
+          echo "Inside action:"
+          echo "INPUT_TAGS='${INPUT_TAGS:-}'"
+          echo "INPUT_PUSH='${INPUT_PUSH:-}'"
+          echo "GITHUB_ACTION_PATH='$GITHUB_ACTION_PATH'"
+          ls -la "$GITHUB_ACTION_PATH"
+        
       # 5) Tag policy gate BEFORE build/push
       - name: Enforce image tagging policy (PIPE-CORE-1.2.5)
         id: tag_policy
@@ -155,6 +163,20 @@ jobs:
           release: ${{ inputs.release }}
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
+
+      # Fallback if tags_resolved is empty for any reason
+      - name: Resolve tags for build (policy fallback)
+        id: tags_final
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESOLVED="${{ steps.tag_policy.outputs.tags_resolved }}"
+          if [ -z "$RESOLVED" ]; then
+            echo "tags_final=${{ inputs.tags }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags_final=$RESOLVED" >> "$GITHUB_OUTPUT"
+          fi
+
 
       - name: Debug resolved tags
         run: |
@@ -169,7 +191,7 @@ jobs:
           context: ${{ inputs.context }}
           dockerfile: ${{ inputs.dockerfile }}
           image_name: ${{ inputs.image_name }}
-          tags: ${{ steps.tag_policy.outputs.tags_resolved }}
+          tags: ${{ steps.tags_final.outputs.tags_final }}
           push: ${{ inputs.push }}
           cache: ${{ steps.cache.outputs.cache_enabled }}
           cache_repo: ${{ steps.cache.outputs.cache_repo }}
