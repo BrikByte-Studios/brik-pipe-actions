@@ -19,7 +19,7 @@
     "job": { "type": "string", "minLength": 1 },
     "actor": { "type": "string" },
 
-    "builder": { "type": "string", "enum": ["kaniko", "buildx"] },
+    "builder": { "type": "string", "enum": ["buildx", "kaniko", "kaniko-v1"] },
     "registry": { "type": "string", "minLength": 1 }
   }
 }
