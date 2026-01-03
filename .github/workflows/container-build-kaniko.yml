@@ -148,6 +148,9 @@ jobs:
           release: ${{ inputs.release }}
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
+      - name: Debug resolved tags
+        run: |
+          echo "resolved tags = '${{ steps.tag_policy.outputs.tags_resolved }}'"
 
       # 6) Kaniko build
       - name: Run Kaniko build (Build-only or Build+Push)
@@ -160,7 +163,6 @@ jobs:
           image_name: ${{ inputs.image_name }}
           tags: ${{ steps.tag_policy.outputs.tags_resolved }}
           push: ${{ inputs.push }}
-
           cache: ${{ steps.cache.outputs.cache_enabled }}
           cache_repo: ${{ steps.cache.outputs.cache_repo }}
           allow_cache_write: ${{ steps.cache.outputs.allow_cache_write }}

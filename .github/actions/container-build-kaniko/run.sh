@@ -48,9 +48,6 @@ DOCKER_CONFIG_DIR_IN="${BRK_DOCKER_CONFIG_DIR:-${INPUT_DOCKER_CONFIG_DIR:-}}"
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
 REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
 
-[ -n "${IMAGE_NAME}" ] || fail "image_name is required"
-[ -n "${TAGS_RAW}" ] || fail "tags is required"
-
 # ---------- Paths ----------
 ROOT="$(pwd)"
 WD="${ROOT}/${WORKING_DIRECTORY}"
@@ -88,6 +85,8 @@ normalize_list() {
 }
 
 # ---------- Preconditions ----------
+[ -n "${IMAGE_NAME}" ] || fail "image_name is required"
+[ -n "${TAGS_RAW}" ] || fail "tags is required"
 [ -d "${WD}" ] || fail "working_directory not found: ${WD}"
 [ -d "${CONTEXT_PATH}" ] || fail "context path not found: ${CONTEXT_PATH}"
 [ -f "${DOCKERFILE_PATH}" ] || fail "dockerfile not found: ${DOCKERFILE_PATH}"
