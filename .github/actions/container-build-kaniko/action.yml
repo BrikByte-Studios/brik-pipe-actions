@@ -36,6 +36,11 @@ inputs:
     required: false
     default: ""
 
+  allow_cache_write:
+    required: false
+    default: "true"
+    description: "If false, cache writes are disabled (safe for forks/untrusted contexts)."
+
   build_args:
     description: "Build args as newline/comma-separated KEY=VAL list."
     required: false
@@ -50,6 +55,11 @@ inputs:
     required: false
     default: "ghcr.io"
 
+  docker_config_dir:
+    required: false
+    default: ""
+    description: "Directory containing .docker/config.json for Kaniko (preferred over secrets)."
+
 outputs:
   image_ref:
     description: "Canonical image ref (image_name)."
@@ -63,6 +73,9 @@ outputs:
   kaniko_log:
     description: "Path to kaniko log file on runner."
     value: ${{ steps.run.outputs.kaniko_log }}
+  duration_ms:
+    description: "Build duration in milliseconds (best-effort)."
+    value: ${{ steps.run.outputs.duration_ms }}
 
 runs:
   using: "composite"
@@ -70,6 +83,21 @@ runs:
     - name: Run Kaniko executor
       id: run
       shell: bash
+      env:
+        # Explicit env bridge (more reliable than implicit INPUT_* in vendored layouts)
+        BRK_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+        BRK_CONTEXT: ${{ inputs.context }}
+        BRK_DOCKERFILE: ${{ inputs.dockerfile }}
+        BRK_IMAGE_NAME: ${{ inputs.image_name }}
+        BRK_TAGS: ${{ inputs.tags }}
+        BRK_PUSH: ${{ inputs.push }}
+        BRK_CACHE: ${{ inputs.cache }}
+        BRK_CACHE_REPO: ${{ inputs.cache_repo }}
+        BRK_ALLOW_CACHE_WRITE: ${{ inputs.allow_cache_write }}
+        BRK_BUILD_ARGS: ${{ inputs.build_args }}
+        BRK_LABELS: ${{ inputs.labels }}
+        BRK_REGISTRY: ${{ inputs.registry }}
+        BRK_DOCKER_CONFIG_DIR: ${{ inputs.docker_config_dir }}
       run: |
         set -euo pipefail
         bash "$GITHUB_ACTION_PATH/run.sh"

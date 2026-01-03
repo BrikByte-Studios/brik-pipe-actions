@@ -23,24 +23,33 @@ set -euo pipefail
 ##
 
 # ---------- Inputs ----------
-WORKING_DIRECTORY="${INPUT_WORKING_DIRECTORY:-.}"
-CONTEXT_REL="${INPUT_CONTEXT:-.}"
-DOCKERFILE_REL="${INPUT_DOCKERFILE:-Dockerfile}"
+WORKING_DIRECTORY="${BRK_WORKING_DIRECTORY:-${INPUT_WORKING_DIRECTORY:-.}}"
+CONTEXT_REL="${BRK_CONTEXT:-${INPUT_CONTEXT:-.}}"
+DOCKERFILE_REL="${BRK_DOCKERFILE:-${INPUT_DOCKERFILE:-Dockerfile}}"
 
-IMAGE_NAME="${INPUT_IMAGE_NAME:?image_name is required}"
-TAGS_RAW="${INPUT_TAGS:?tags is required}"
+IMAGE_NAME="${BRK_IMAGE_NAME:-${INPUT_IMAGE_NAME:-}}"
+TAGS_RAW="${BRK_TAGS:-${INPUT_TAGS:-}}"
 
-PUSH="${INPUT_PUSH:-false}"
-CACHE="${INPUT_CACHE:-true}"
-CACHE_REPO="${INPUT_CACHE_REPO:-}"
+PUSH="${BRK_PUSH:-${INPUT_PUSH:-false}}"
+CACHE="${BRK_CACHE:-${INPUT_CACHE:-true}}"
+CACHE_REPO="${BRK_CACHE_REPO:-${INPUT_CACHE_REPO:-}}"
 
-BUILD_ARGS_RAW="${INPUT_BUILD_ARGS:-}"
-LABELS_RAW="${INPUT_LABELS:-}"
-REGISTRY="${INPUT_REGISTRY:-ghcr.io}"
+# NEW: safe cache write control
+ALLOW_CACHE_WRITE="${BRK_ALLOW_CACHE_WRITE:-${INPUT_ALLOW_CACHE_WRITE:-true}}"
+
+BUILD_ARGS_RAW="${BRK_BUILD_ARGS:-${INPUT_BUILD_ARGS:-}}"
+LABELS_RAW="${BRK_LABELS:-${INPUT_LABELS:-}}"
+REGISTRY="${BRK_REGISTRY:-${INPUT_REGISTRY:-ghcr.io}}"
+
+# NEW: prefer auth-prepared docker config dir
+DOCKER_CONFIG_DIR_IN="${BRK_DOCKER_CONFIG_DIR:-${INPUT_DOCKER_CONFIG_DIR:-}}"
 
 # From workflow env (secrets)
 REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
 REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
+
+[ -n "${IMAGE_NAME}" ] || fail "image_name is required"
+[ -n "${TAGS_RAW}" ] || fail "tags is required"
 
 # ---------- Paths ----------
 ROOT="$(pwd)"
@@ -105,14 +114,27 @@ if [ "${PUSH}" = "true" ]; then
   fi
 fi
 
-# Write docker config for Kaniko (DO NOT ECHO SECRETS)
-mkdir -p "${DOCKER_CONFIG_DIR}/.docker"
-CONFIG_JSON="${DOCKER_CONFIG_DIR}/.docker/config.json"
+# ---------- Docker config for Kaniko ----------
+# If workflow provided docker_config_dir (from auth helper), use it.
+# Otherwise, generate one from REGISTRY_USERNAME/PASSWORD (legacy support).
+if [ -n "${DOCKER_CONFIG_DIR_IN}" ]; then
+  # Expect docker_config_dir to contain config.json at either:
+  # - <dir>/config.json OR <dir>/.docker/config.json
+  if [ -f "${DOCKER_CONFIG_DIR_IN}/config.json" ]; then
+    DOCKER_CONFIG_DIR="${DOCKER_CONFIG_DIR_IN}"
+  elif [ -f "${DOCKER_CONFIG_DIR_IN}/.docker/config.json" ]; then
+    DOCKER_CONFIG_DIR="${DOCKER_CONFIG_DIR_IN}"
+  else
+    fail "docker_config_dir provided but no config.json found under: ${DOCKER_CONFIG_DIR_IN}"
+  fi
+else
+  # Backward-compatible path: generate temp docker config from secrets (no secrets printed)
+  mkdir -p "${DOCKER_CONFIG_DIR}/.docker"
+  CONFIG_JSON="${DOCKER_CONFIG_DIR}/.docker/config.json"
 
-# If username/password are not provided, write an empty config (build-only can still run).
-if [ -n "${REGISTRY_USERNAME}" ] && [ -n "${REGISTRY_PASSWORD}" ]; then
-  AUTH_B64="$(printf "%s:%s" "${REGISTRY_USERNAME}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')"
-  cat > "${CONFIG_JSON}" <<EOF
+  if [ -n "${REGISTRY_USERNAME}" ] && [ -n "${REGISTRY_PASSWORD}" ]; then
+    AUTH_B64="$(printf "%s:%s" "${REGISTRY_USERNAME}" "${REGISTRY_PASSWORD}" | base64 | tr -d '\n')"
+    cat > "${CONFIG_JSON}" <<EOF
 {
   "auths": {
     "${REGISTRY}": {
@@ -121,10 +143,11 @@ if [ -n "${REGISTRY_USERNAME}" ] && [ -n "${REGISTRY_PASSWORD}" ]; then
   }
 }
 EOF
-else
-  cat > "${CONFIG_JSON}" <<EOF
+  else
+    cat > "${CONFIG_JSON}" <<EOF
 { "auths": {} }
 EOF
+  fi
 fi
 
 # Build args & labels -> Kaniko flags
@@ -147,9 +170,17 @@ if [ "${CACHE}" = "true" ]; then
   if [ -n "${CACHE_REPO}" ]; then
     CACHE_FLAGS+=( "--cache-repo=${CACHE_REPO}" )
   fi
+
+  # Safe default for forks/untrusted contexts: do not write cache layers
+  if [ "${ALLOW_CACHE_WRITE}" != "true" ]; then
+    # Best-effort: keep read usage but prevent writing/copying layers.
+    # If this causes issues, hard-disable cache instead.
+    CACHE_FLAGS+=( "--cache-copy-layers=false" )
+  fi
 else
   CACHE_FLAGS+=( "--cache=false" )
 fi
+
 
 # Push flags
 PUSH_FLAGS=()
@@ -183,6 +214,7 @@ set +x
 # Create digest file only if kaniko writes one; we still create empty file for evidence consistency
 : > "${DIGEST_FILE}"
 
+START_MS="$(date +%s%3N)"
 # Execute
 docker run --rm \
   -v "${CONTEXT_PATH}:/workspace" \
@@ -210,6 +242,8 @@ if [ -f "${CONTEXT_PATH}/.kaniko-digest.txt" ]; then
 fi
 
 DIGEST="$(cat "${DIGEST_FILE}" | tr -d '\n' || true)"
+END_MS="$(date +%s%3N)"
+DURATION_MS="$((END_MS-START_MS))"
 
 # Outputs
 {
@@ -217,4 +251,5 @@ DIGEST="$(cat "${DIGEST_FILE}" | tr -d '\n' || true)"
   echo "digest=${DIGEST}"
   echo "tags_pushed=${TAGS_PUSHED}"
   echo "kaniko_log=${KANIKO_LOG}"
+  echo "duration_ms=${DURATION_MS}"
 } >> "${GITHUB_OUTPUT}"
