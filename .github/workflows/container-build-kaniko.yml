@@ -148,6 +148,7 @@ jobs:
           release: ${{ inputs.release }}
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
+          
       - name: Debug resolved tags
         run: |
           echo "resolved tags = '${{ steps.tag_policy.outputs.tags_resolved }}'"
