@@ -72,4 +72,4 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        bash .github/actions/container-build-kaniko/run.sh
+        bash "$GITHUB_ACTION_PATH/run.sh"
