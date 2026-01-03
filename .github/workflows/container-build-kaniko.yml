@@ -110,6 +110,10 @@ jobs:
           ref: main
           path: .brik/pipe
 
+      - name: Install brik-pipe-actions deps (validator)
+        working-directory: .brik/pipe
+        run: npm ci
+
       # 3) Cache contract
       - name: Resolve cache config
         id: cache
