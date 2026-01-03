@@ -137,6 +137,13 @@ jobs:
           registry_username: ${{ secrets.registry_username || '' }}
           registry_password: ${{ secrets.registry_password || '' }}
 
+      - name: Debug workflow_call inputs (tags)
+        run: |
+          echo "inputs.image_name='${{ inputs.image_name }}'"
+          echo "inputs.tags='${{ inputs.tags }}'"
+          echo "inputs.push='${{ inputs.push }}'"
+        
+
       # 5) Tag policy gate BEFORE build/push
       - name: Enforce image tagging policy (PIPE-CORE-1.2.5)
         id: tag_policy
@@ -148,7 +155,7 @@ jobs:
           release: ${{ inputs.release }}
           evidence_root: .audit/PIPE-CONTAINER-BUILD
           enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
-          
+
       - name: Debug resolved tags
         run: |
           echo "resolved tags = '${{ steps.tag_policy.outputs.tags_resolved }}'"
