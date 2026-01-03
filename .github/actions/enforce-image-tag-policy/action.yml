@@ -1,0 +1,76 @@
+name: "brik: enforce-image-tag-policy (v1)"
+description: "Enforces BrikByteOS v1 container image tagging policy (SHA + SemVer) before any push."
+
+inputs:
+  push:
+    required: true
+    description: "If true, policy enforces SHA tag at minimum. If false, policy is informational and always passes."
+
+  tags:
+    required: true
+    description: "Comma-separated tag list, e.g. 'sha-abc1234,v1.2.3'"
+
+  allow_latest:
+    required: false
+    default: "false"
+    description: "If true, 'latest' tag is allowed. Default: false."
+
+  # Release detection (v1): explicit or inferred from ref.
+  release:
+    required: false
+    default: "false"
+    description: "If true, SemVer tag vX.Y.Z is required."
+
+  # Overrides (optional; otherwise inferred)
+  sha:
+    required: false
+    default: ""
+    description: "Commit SHA override. If empty, uses GITHUB_SHA."
+
+  semver:
+    required: false
+    default: ""
+    description: "SemVer override, e.g. v1.2.3. If empty, detected from tags list."
+
+  # Evidence root (kept stable)
+  evidence_root:
+    required: false
+    default: ".audit/PIPE-CONTAINER-BUILD"
+    description: "Root for audit evidence. Policy evidence goes under /policy."
+
+  # Escape hatch (for pilots). Default is strict enforcement.
+  enforce_tag_policy:
+    required: false
+    default: "true"
+    description: "If false, does not fail the job; emits evidence with verdict=warn."
+
+outputs:
+  tags_resolved:
+    description: "Normalized, deduped tag list (comma-separated)."
+    value: ${{ steps.run.outputs.tags_resolved }}
+
+  is_release:
+    description: "Whether release mode was detected/enabled."
+    value: ${{ steps.run.outputs.is_release }}
+
+  detected_sha_tag:
+    description: "Detected SHA tag (canonical sha-<shortsha>) if present."
+    value: ${{ steps.run.outputs.detected_sha_tag }}
+
+  detected_semver_tag:
+    description: "Detected SemVer tag vX.Y.Z if present."
+    value: ${{ steps.run.outputs.detected_semver_tag }}
+
+  policy_verdict:
+    description: "pass|fail|warn"
+    value: ${{ steps.run.outputs.policy_verdict }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Enforce tagging policy
+      id: run
+      shell: bash
+      run: |
+        set -euo pipefail
+        node .github/actions/enforce-image-tag-policy/enforce.mjs

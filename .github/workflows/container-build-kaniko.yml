@@ -55,6 +55,17 @@ on:
         type: boolean
         default: true
 
+      # --- PIPE-CORE-1.2.5 Tag Policy (v1) ---
+      enforce_tag_policy:
+        type: boolean
+        default: true
+      allow_latest:
+        type: boolean
+        default: false
+      release:
+        type: boolean
+        default: false
+
     secrets:
       registry_username:
         required: false
@@ -68,7 +79,7 @@ on:
         value: ${{ jobs.build.outputs.digest }}
       tags_pushed:
         value: ${{ jobs.build.outputs.tags_pushed }}
-      audit_bundle_path: 
+      audit_bundle_path:
         value: ${{ jobs.build.outputs.audit_bundle_path }}
 
 jobs:
@@ -78,6 +89,7 @@ jobs:
       contents: read
       packages: write # needed for GHCR push (secrets-mode)
       id-token: write # only used if auth_mode=oidc (safe to keep; or guard via separate workflow)
+
     outputs:
       image_ref: ${{ steps.kaniko.outputs.image_ref }}
       digest: ${{ steps.kaniko.outputs.digest }}
@@ -113,6 +125,18 @@ jobs:
           registry_username: ${{ secrets.registry_username || '' }}
           registry_password: ${{ secrets.registry_password || '' }}
 
+      # --- PIPE-CORE-1.2.5: Enforce tag policy BEFORE build/push ---
+      - name: Enforce image tagging policy (PIPE-CORE-1.2.5)
+        id: tag_policy
+        uses: ./.github/actions/enforce-image-tag-policy
+        with:
+          push: ${{ inputs.push }}
+          tags: ${{ inputs.tags }}
+          allow_latest: ${{ inputs.allow_latest }}
+          release: ${{ inputs.release }}
+          evidence_root: .audit/PIPE-CONTAINER-BUILD
+          enforce_tag_policy: ${{ inputs.enforce_tag_policy }}
+
       # 3) Kaniko build step (build-only default via push=false)
       - name: Run Kaniko build (Build-only or Build+Push)
         id: kaniko
@@ -122,7 +146,7 @@ jobs:
           context: ${{ inputs.context }}
           dockerfile: ${{ inputs.dockerfile }}
           image_name: ${{ inputs.image_name }}
-          tags: ${{ inputs.tags }}
+          tags: ${{ steps.tag_policy.outputs.tags_resolved }}
           push: ${{ inputs.push }}
 
           cache: ${{ steps.cache.outputs.cache_enabled }}
@@ -147,7 +171,7 @@ jobs:
           context: ${{ inputs.context }}
           dockerfile: ${{ inputs.dockerfile }}
           image_name: ${{ inputs.image_name }}
-          tags: ${{ inputs.tags }}
+          tags: ${{ steps.tag_policy.outputs.tags_resolved }}
           push: ${{ inputs.push }}
 
           cache: ${{ steps.cache.outputs.cache_enabled }}
@@ -177,6 +201,13 @@ jobs:
           node scripts/regression/validate-evidence.mjs \
             --schema schemas/evidence/container-build.evidence.schema.json \
             --file .audit/PIPE-CONTAINER-BUILD/metadata.json
+
+      - name: Validate tag policy evidence schema
+        if: ${{ inputs.validate_evidence_schema && always() }}
+        run: |
+          node scripts/regression/validate-evidence.mjs \
+            --schema schemas/evidence/container-tag-policy.evidence.schema.json \
+            --file .audit/PIPE-CONTAINER-BUILD/policy/policy-summary.json
 
       # 6) Upload evidence
       - name: Upload evidence artifact
